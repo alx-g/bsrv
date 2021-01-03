@@ -1,6 +1,7 @@
-import datetime
+#!/usr/bin/env python3
+import time
 
-from borgsrv import Config, Logger, Job
+from borgsrv import Config, Logger, Job, Scheduler
 
 try:
 
@@ -13,18 +14,15 @@ try:
     # Configure proper logging according to config
     Logger.configure()
 
+    # Instantiate scheduler
+    scheduler = Scheduler()
+
     # Extract Jobs from Config
-    jobs = []
     for s in Config.sections():
         if s[0] == '$':
             newjob = Job.from_config(s)
             if newjob:
-                jobs.append(newjob)
-
-    if not jobs:
-        Logger.warning('No jobs loaded. There is nothing to do.')
-
-    print(jobs[0].schedule.next(datetime.datetime.now()))
+                scheduler.register(newjob)
 
 except SystemExit as e:
     if e.code == 0:
@@ -32,4 +30,17 @@ except SystemExit as e:
     else:
         Logger.error('Exit ({})'.format(e.code))
 else:
-    Logger.info('Clean Exit.')
+
+    try:
+        scheduler.start()
+        time.sleep(1000000)
+
+    except SystemExit as e:
+        if e.code == 0:
+            Logger.info('Clean Exit.')
+        else:
+            Logger.error('Exit ({})'.format(e.code))
+    except KeyboardInterrupt:
+        Logger.info('User requested exit')
+    finally:
+        scheduler.stop()
