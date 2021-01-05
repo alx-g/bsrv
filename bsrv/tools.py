@@ -1,5 +1,5 @@
+import datetime
 import json
-import dateutil.parser
 
 
 def parse_json(json_source):
@@ -21,7 +21,7 @@ def datetime_json(source):
             except ValueError:
                 pass
             try:
-                source[k] = dateutil.parser.parse(v, ignoretz=True)
+                source[k] = datetime.datetime.fromisoformat(v)
             except (ValueError, OverflowError):
                 pass
 

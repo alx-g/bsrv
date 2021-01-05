@@ -63,12 +63,15 @@ class Job:
         self.retry_delay: int = retry_delay
         self.retry_count: int = 0
 
+    def __eq__(self, other):
+        return other.name == self.name
+
     def run(self):
         env = os.environ.copy()
         env['BORG_REPO'] = self.borg_repo
         env['BORG_RSH'] = self.borg_rsh
         env['BORG_PASSPHRASE'] = self.borg_passphrase
-        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir')
+        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
 
         now = time.time()
 
@@ -91,12 +94,12 @@ class Job:
         if p.returncode == 0:
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
-                    Logger.info('[JOB] '+line)
+                    Logger.info('[JOB] ' + line)
         else:
             Logger.error('[JOB] borg returned with non-zero exitcode')
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
-                    Logger.error('[JOB] '+line)
+                    Logger.error('[JOB] ' + line)
             Logger.warn('[JOB] skipping borg prune due to previous error')
             return False
 
@@ -118,13 +121,13 @@ class Job:
         if p.returncode == 0:
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
-                    Logger.info('[JOB] '+line)
+                    Logger.info('[JOB] ' + line)
             return True
         else:
             Logger.error('[JOB] borg returned with non-zero exitcode')
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
-                    Logger.error('[JOB] '+line)
+                    Logger.error('[JOB] ' + line)
             return False
 
     def get_last_successful_archive_datetime(self):
@@ -152,7 +155,7 @@ class Job:
         env['BORG_REPO'] = self.borg_repo
         env['BORG_RSH'] = self.borg_rsh
         env['BORG_PASSPHRASE'] = self.borg_passphrase
-        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir')
+        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
 
         params = ['borg', 'list', '--json']
 
@@ -174,37 +177,83 @@ class Job:
                     Logger.error(line)
             return None
 
+    def status(self):
+        last = self.get_last_successful_archive_datetime()
+        return {
+            'job_last_successful': last.isoformat() if last else 'none',
+            'job_next_suggested': self.get_next_archive_datetime(last).isoformat() if last else 'none',
+            'job_retry': str(self.retry_count)
+        }
+
 
 class ScheduleParseError(Exception):
     pass
 
 
-T = TypeVar('T')
-
-
-class SchedulerQueue(Generic[T]):
+class SchedulerQueue:
     def __init__(self):
-        self.waiting: OrderedDict[datetime.datetime, List[T]] = OrderedDict()
+        self.waiting: OrderedDict = OrderedDict()
         self.lock: threading.Lock = threading.Lock()
         self.hook_update = lambda: []
 
     def set_update_hook(self, func):
         self.hook_update = func
 
-    def put(self, dt: datetime.datetime, elem: T, hook_enabled: bool = True) -> NoReturn:
+    def __reorder(self):
+        self.waiting = OrderedDict((key, self.waiting[key]) for key in sorted(self.waiting.keys()))
+
+    def when(self, elem: Any) -> Union[None, datetime.datetime]:
+        for this_dt, this_elems in self.waiting.items():
+            for k in range(len(this_elems)):
+                this_elem = this_elems[k]
+                if elem is not None and this_elem == elem:
+                    return this_dt
+
+        return None
+
+    def put(self, elem: Any, dt: datetime.datetime, hook_enabled: bool = True) -> NoReturn:
         with self.lock:
             if dt in self.waiting.keys():
                 self.waiting[dt].append(elem)
             else:
                 self.waiting[dt] = [elem]
-            self.waiting = OrderedDict((key, self.waiting[key]) for key in sorted(self.waiting.keys()))
+            self.__reorder()
         if hook_enabled:
             self.hook_update()
+
+    def delete(self, elem: Any, hook_enabled: bool = True) -> bool:
+        with self.lock:
+            found = False
+            for this_dt, this_elems in self.waiting.items():
+                for k in range(len(this_elems)):
+                    this_elem = this_elems[k]
+                    if elem is not None and this_elem == elem:
+                        if len(this_elems) == 1:
+                            del self.waiting[this_dt]
+                        else:
+                            del self.waiting[this_dt][k]
+                        found = True
+                        break
+                if found:
+                    break
+            self.__reorder()
+
+        if found and hook_enabled:
+            self.hook_update()
+
+        return found
+
+    def move(self, elem: Any, dt: datetime.datetime, hook_enabled: bool = True) -> bool:
+        if self.delete(elem, hook_enabled=False):
+            self.put(elem, dt, hook_enabled=hook_enabled)
+            return True
+        else:
+            return False
 
     def get_waiting(self) -> OrderedDict:
         return self.waiting
 
-    def get_next_action(self) -> Tuple[Union[None, datetime.datetime], List[T]]:
+    def get_next_action(self) -> Tuple[Union[None, datetime.datetime], List[Any]]:
         with self.lock:
             try:
                 dt, items = self.waiting.popitem(last=False)
@@ -228,22 +277,74 @@ class Scheduler:
         self.jobs: List[Job] = []
         self.queue: SchedulerQueue[Job] = SchedulerQueue()
         self.queue.set_update_hook(self.__update_wakeup)
-        self.timer: Union[None,threading.Timer] = None
+        self.timer: Union[None, threading.Timer] = None
         self.timer_event: threading.Event = threading.Event()
         self.timer_reason: WakeupReason = WakeupReason.TIMER
         self.main_thread: threading.Thread = threading.Thread(target=self.scheduler_thread)
         self.jobs_running: Dict[int, threading.Thread] = {}
         self.jobs_running_lock: threading.Lock = threading.Lock()
         self.running: bool = False
+        self.next_dt: Union[datetime.datetime, None] = None
+        self.next_jobs: List[Job] = []
+
+    def find_job_by_name(self, job_name: str) -> Union[None, Job]:
+        list_of_jobs = [job.name for job in self.jobs]
+        if not job_name in list_of_jobs:
+            return None
+        else:
+            try:
+                return self.jobs[list_of_jobs.index(job_name)]
+            except (IndexError, KeyError):
+                return None
+
+    def get_job_status(self, job: Job) -> Dict[str, str]:
+        job_status = job.status()
+
+        if job in self.next_jobs:
+            job_status['schedule_status'] = 'next'
+            job_status['schedule_dt'] = self.next_dt.isoformat()
+        else:
+            queue_dt = self.queue.when(job)
+            if queue_dt:
+                job_status['schedule_status'] = 'wait'
+                job_status['schedule_dt'] = queue_dt.isoformat()
+            else:
+                job_status['schedule_status'] = 'none'
+                job_status['schedule_dt'] = 'none'
+
+        return job_status
+
+    def schedule(self, job: Job, dt: datetime.datetime, hook_enabled: bool = True) -> bool:
+        if job not in self.jobs:
+            return False
+        else:
+            self.queue.put(job, dt, hook_enabled=hook_enabled)
+            return True
+
+    def unschedule(self, job: Job) -> bool:
+        if job not in self.jobs:
+            return False
+        else:
+            return self.queue.delete(job)
 
     def register(self, job: Job) -> NoReturn:
         self.jobs.append(job)
         next_dt = job.get_next_archive_datetime()
         if next_dt is None:
-            Logger.error('[Scheduler] Could not schedule job "{}", no last backup date.'.format(job.name))
+            Logger.error('[Scheduler] Could not register job "{}", no last backup date.'.format(job.name))
         else:
-            self.queue.put(next_dt, job, hook_enabled=False)
-            Logger.debug('[Scheduler] Registered job "{}"'.format(job.name))
+            if self.schedule(job, next_dt, hook_enabled=False):
+                Logger.info('[Scheduler] Registered job "{}"'.format(job.name))
+            else:
+                Logger.error('[Scheduler] Could not register job "{}", unknown error'.format(job.name))
+
+    def advance_to_now(self, job: Job) -> bool:
+        if job in self.next_jobs:
+            self.next_jobs.remove(job)
+            self.queue.put(job, datetime.datetime.now())
+            return True
+        else:
+            return self.queue.move(job, datetime.datetime.now())
 
     def start(self) -> NoReturn:
         self.running = True
@@ -270,14 +371,14 @@ class Scheduler:
                 Logger.warning('No jobs registered, nothing to do')
                 break
 
-            next_dt, jobs = self.queue.get_next_action()
+            self.next_dt, self.next_jobs = self.queue.get_next_action()
 
-            if next_dt is not None:
-                sleep_time = max(0.0, (next_dt - datetime.datetime.now()).total_seconds())
+            if self.next_dt is not None:
+                sleep_time = max(0.0, (self.next_dt - datetime.datetime.now()).total_seconds())
                 self.timer = threading.Timer(sleep_time, self.__timer_wakeup)
 
                 Logger.debug(
-                    '[Scheduler] Determined next action at {}, waiting for {} s.'.format(next_dt, sleep_time))
+                    '[Scheduler] Determined next action at {}, waiting for {} s.'.format(self.next_dt, sleep_time))
                 self.timer_reason = WakeupReason.TIMER
                 self.timer.start()
             else:
@@ -287,27 +388,25 @@ class Scheduler:
             self.timer_event.wait()
 
             if self.timer_reason == WakeupReason.SHUTDOWN:
-                try:
+                if self.timer:
                     self.timer.cancel()
-                except:
-                    pass
                 break
             elif self.timer_reason == WakeupReason.UPDATE:
                 Logger.debug('[Scheduler] Wakeup due to update, re-evaluating todos.')
                 self.timer_event.clear()
-                try:
+                if self.timer:
                     self.timer.cancel()
-                except:
-                    pass
+                while self.next_jobs:
+                    job = self.next_jobs.pop()
+                    self.queue.put(job, self.next_dt)
                 continue
             elif self.timer_reason == WakeupReason.TIMER:
                 Logger.debug('[Scheduler] Wakeup due to timer, launching jobs...')
-                try:
+                if self.timer:
                     self.timer.cancel()
-                except:
-                    pass
 
-            for job in jobs:
+            while self.next_jobs:
+                job = self.next_jobs.pop()
                 thread = threading.Thread(target=self.job_thread, args=(job,))
                 thread.start()
                 with self.jobs_running_lock:
@@ -333,7 +432,7 @@ class Scheduler:
 
             with self.jobs_running_lock:
                 del self.jobs_running[threading.get_ident()]
-            self.queue.put(job.get_next_archive_datetime(), job)
+            self.queue.put(job, job.get_next_archive_datetime())
         else:
             if job.retry_count > 0:
                 Logger.warning('[JOB] Retry {} for job "{}" failed'.format(job.retry_count, job.name))
@@ -343,11 +442,12 @@ class Scheduler:
 
             if job.retry_delay >= 0:
                 scheduled_retry_dt = datetime.datetime.now() + datetime.timedelta(seconds=job.retry_delay)
-                Logger.debug('[JOB] Retry for job "{}" scheduled in {}'.format(job.name, datetime.timedelta(seconds=job.retry_delay)))
-                self.queue.put(scheduled_retry_dt, job)
+                Logger.debug('[JOB] Retry for job "{}" scheduled in {}'.format(job.name, datetime.timedelta(
+                    seconds=job.retry_delay)))
+                self.queue.put(job, scheduled_retry_dt)
             else:
                 scheduled_next_dt = job.get_next_archive_datetime(datetime.datetime.now())
-                self.queue.put(scheduled_next_dt, job)
+                self.queue.put(job, scheduled_next_dt)
 
 
 class Schedule:
