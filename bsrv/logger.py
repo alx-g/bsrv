@@ -44,6 +44,7 @@ class LoggerMeta(type):
 
 class Logger(metaclass=LoggerMeta):
     logger = None
+    logging_targets: List[LogTarget] = []
 
     @staticmethod
     def initialize():
@@ -56,28 +57,28 @@ class Logger(metaclass=LoggerMeta):
 
         logging_targets_rawstr = Config.get('logging', 'target', fallback='stdout')
         logging_targets_str = [s.strip() for s in logging_targets_rawstr.split(',')]
-        logging_targets: List[LogTarget] = []
+        Logger.logging_targets = []
 
         for t in logging_targets_str:
             if t not in log_target_dict.keys():
                 print('Error in config file: logging target can only be "file", "journald" or "stdout". '
                       'Ignoring "{}"'.format(t), file=sys.stderr)
             else:
-                logging_targets.append(log_target_dict[t])
+                Logger.logging_targets.append(log_target_dict[t])
 
         log_path = Config.get('logging', 'path', fallback='/var/log/bsrvd.log')
 
-        if LogTarget.STDOUT in logging_targets:
+        if LogTarget.STDOUT in Logger.logging_targets:
             stdout_handler = logging.StreamHandler(sys.stdout)
             stdout_handler.setFormatter(log_formatter)
             Logger.addHandler(stdout_handler)
 
-        if LogTarget.JOURNAL in logging_targets:
+        if LogTarget.JOURNAL in Logger.logging_targets:
             if not init_systemd_logging(logger=Logger.logger):
                 print('Could not connect to journald logging. This daemon needs to be run by systemd. '
                       'Now only logging to stdout', file=sys.stderr)
 
-        if LogTarget.FILE in logging_targets:
+        if LogTarget.FILE in Logger.logging_targets:
             try:
                 file_handler = logging.handlers.TimedRotatingFileHandler(log_path,
                                                                          when='midnight',

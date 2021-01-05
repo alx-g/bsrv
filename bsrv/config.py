@@ -1,7 +1,11 @@
 import configparser
 import sys
+import os
+import pathlib
 
-from .logger import Logger
+from typing import List
+
+from .logger import Logger, LogTarget
 
 
 class ConfigMeta(type):
@@ -28,3 +32,26 @@ class Config(metaclass=ConfigMeta):
             Logger.critical('Error in config file on line {}. {}: {}'.format(e.lineno, repr(e.line),
                                                                              e.message.splitlines(keepends=False)[0]))
             sys.exit(42)
+
+    @staticmethod
+    def check_dirs():
+        paths: List[pathlib.Path] = []
+
+        if LogTarget.FILE in Logger.logging_targets:
+            log_path = Config.get('logging', 'path')
+            log_dir, log_file = os.path.split(log_path)
+            paths.append(pathlib.Path(log_dir))
+
+        paths.append(pathlib.Path(Config.get('borg', 'base_dir')))
+        paths.append(pathlib.Path(Config.get('borg', 'mount_dir')))
+
+        failed = False
+
+        for path in paths:
+            path.mkdir(mode=0o700, parents=True, exist_ok=True)
+            if not os.access(path, os.R_OK | os.X_OK | os.W_OK):
+                failed = True
+                Logger.critical('Cannot write to "{}"'.format(path))
+        if failed:
+            sys.exit(33)
+

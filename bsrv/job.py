@@ -12,6 +12,7 @@ from collections import OrderedDict
 from typing import *
 
 from .config import Config
+from .cache import Cache
 from .logger import Logger
 from .tools import parse_json
 
@@ -30,7 +31,8 @@ class Job:
                 borg_prune_args=shlex.split(Config.get(cfg_section, 'borg_prune_args')),
                 borg_create_args=shlex.split(Config.get(cfg_section, 'borg_create_args')),
                 schedule=Schedule(Config.get(cfg_section, 'schedule')),
-                retry_delay=Config.getint(cfg_section, 'retry_delay')
+                retry_delay=Config.getint(cfg_section, 'retry_delay', fallback=60),
+                retry_max=Config.getint(cfg_section, 'retry_max', fallback=3)
             )
         except ScheduleParseError:
             Logger.error('Error in config file: Invalid schedule specification for job "{}"'.format(cfg_section))
@@ -49,6 +51,7 @@ class Job:
             borg_prune_args,
             schedule,
             retry_delay,
+            retry_max,
             borg_archive_name_template="%Y-%m-%d_%H-%M-%S",
             borg_rsh='ssh'
     ):
@@ -61,7 +64,9 @@ class Job:
         self.borg_create_args: str = borg_create_args
         self.schedule: Schedule = schedule
         self.retry_delay: int = retry_delay
+        self.retry_max: int = retry_max
         self.retry_count: int = 0
+        self.last_archive_date = Cache.get('job_{}_last_dt'.format(self.name))
 
     def __eq__(self, other):
         return other.name == self.name
@@ -76,7 +81,7 @@ class Job:
         now = time.time()
 
         archive_name = ('::{:%s}' % (self.borg_archive_name_template,)).format(datetime.datetime.fromtimestamp(now))
-        params = ['borg', 'create'] + [archive_name] + self.borg_create_args
+        params = [Config.get('borg', 'binary', fallback='borg'), 'create'] + [archive_name] + self.borg_create_args
 
         tokens = [shlex.quote(token) for token in params]
         Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
@@ -103,7 +108,7 @@ class Job:
             Logger.warn('[JOB] skipping borg prune due to previous error')
             return False
 
-        params = ['borg', 'prune'] + self.borg_prune_args
+        params = [Config.get('borg', 'binary', fallback='borg'), 'prune'] + self.borg_prune_args
 
         tokens = [shlex.quote(token) for token in params]
         Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
@@ -130,21 +135,28 @@ class Job:
                     Logger.error('[JOB] ' + line)
             return False
 
-    def get_last_successful_archive_datetime(self):
-        list_of_archives = self.list_archives()
-        if list_of_archives:
-            list_of_times = sorted([a['time'] for a in list_of_archives], reverse=True)
-            if list_of_times:
-                return list_of_times[0]
-            else:
-                return datetime.datetime.fromtimestamp(0)
+    def get_last_archive_datetime(self):
+        if not self.last_archive_date:
+            list_of_archives = self.list_archives()
+            if list_of_archives:
+                list_of_times = sorted([a['time'] for a in list_of_archives], reverse=True)
+                if list_of_times:
+                    return list_of_times[0]
+                else:
+                    return datetime.datetime.fromtimestamp(0)
 
-        Logger.warning('Could not determine last successful archive datetime for job "{}".'.format(self.name))
-        return None
+            Logger.warning('Could not determine last successful archive datetime for job "{}".'.format(self.name))
+            return None
+        else:
+            return self.last_archive_date
+
+    def set_last_archive_datetime(self, dt: datetime.datetime):
+        self.last_archive_date = dt
+        Cache.set('job_{}_last_dt'.format(self.name), dt)
 
     def get_next_archive_datetime(self, last: Union[None, datetime.datetime] = None):
         if last is None:
-            last = self.get_last_successful_archive_datetime()
+            last = self.get_last_archive_datetime()
         if last is not None:
             return self.schedule.next(last)
         else:
@@ -178,7 +190,7 @@ class Job:
             return None
 
     def status(self):
-        last = self.get_last_successful_archive_datetime()
+        last = self.get_last_archive_datetime()
         return {
             'job_last_successful': last.isoformat() if last else 'none',
             'job_next_suggested': self.get_next_archive_datetime(last).isoformat() if last else 'none',
@@ -429,18 +441,37 @@ class Scheduler:
                 job.retry_count = 0
             else:
                 Logger.info('[JOB] job "{}" completed successfully'.format(job.name))
+                job.retry_count = 0
 
+            job.set_last_archive_datetime(datetime.datetime.now())
             with self.jobs_running_lock:
                 del self.jobs_running[threading.get_ident()]
             self.queue.put(job, job.get_next_archive_datetime())
         else:
+            give_up = job.retry_count >= job.retry_max
             if job.retry_count > 0:
-                Logger.warning('[JOB] Retry {} for job "{}" failed'.format(job.retry_count, job.name))
-            job.retry_count += 1
+                if give_up:
+                    Logger.error('[JOB] Retry {} for job "{}" failed. Giving up.'.format(job.retry_count, job.name))
+                    job.retry_count = -1
+                else:
+                    Logger.warning('[JOB] Retry {} for job "{}" failed'.format(job.retry_count, job.name))
+                    if job.retry_count < 0:
+                        job.retry_count = 0
+                    job.retry_count += 1
+            else:
+                if give_up:
+                    Logger.error('[JOB] Job "{}" failed. Giving up.'.format(job.name))
+                    job.retry_count = -1
+                else:
+                    Logger.warning('[JOB] Job "{}" failed.'.format(job.name))
+                    if job.retry_count < 0:
+                        job.retry_count = 0
+                    job.retry_count += 1
+
             with self.jobs_running_lock:
                 del self.jobs_running[threading.get_ident()]
 
-            if job.retry_delay >= 0:
+            if not give_up:
                 scheduled_retry_dt = datetime.datetime.now() + datetime.timedelta(seconds=job.retry_delay)
                 Logger.debug('[JOB] Retry for job "{}" scheduled in {}'.format(job.name, datetime.timedelta(
                     seconds=job.retry_delay)))
