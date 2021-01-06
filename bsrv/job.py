@@ -7,6 +7,7 @@ import shlex
 import subprocess
 import threading
 import time
+import pathlib
 from calendar import monthrange
 from collections import OrderedDict
 from typing import *
@@ -67,6 +68,7 @@ class Job:
         self.retry_max: int = retry_max
         self.retry_count: int = 0
         self.last_archive_date = Cache.get('job_{}_last_dt'.format(self.name))
+        self.mount_dir = os.path.join(Config.get('borg', 'mount_dir', fallback='/tmp/bsrvd-mount'),self.name)
 
     def __eq__(self, other):
         return other.name == self.name
@@ -171,6 +173,9 @@ class Job:
 
         params = ['borg', 'list', '--json']
 
+        tokens = [shlex.quote(token) for token in params]
+        Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
+
         p = subprocess.Popen(
             params,
             stdout=subprocess.PIPE,
@@ -188,6 +193,63 @@ class Job:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.error(line)
             return None
+
+    def mount(self):
+        env = os.environ.copy()
+        env['BORG_RSH'] = self.borg_rsh
+        env['BORG_PASSPHRASE'] = self.borg_passphrase
+        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
+
+        pathlib.Path(self.mount_dir).mkdir(exist_ok=True)
+        params = ['borg', 'mount', self.borg_repo, self.mount_dir]
+
+        tokens = [shlex.quote(token) for token in params]
+        Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
+
+        p = subprocess.Popen(
+            params,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env
+        )
+        stdout, stderr = p.communicate()
+        stdout_ = stdout.decode()
+        stderr_ = stderr.decode()
+        if p.returncode == 0:
+            return True
+        else:
+            Logger.error('borg returned with non-zero exitcode')
+            if stdout_ or stderr_:
+                for line in (stdout_ + stderr_).splitlines(keepends=False):
+                    Logger.error(line)
+            return False
+
+    def umount(self):
+        env = os.environ.copy()
+        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
+
+        params = ['borg', 'umount', self.mount_dir]
+
+        tokens = [shlex.quote(token) for token in params]
+        Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
+
+        p = subprocess.Popen(
+            params,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env
+        )
+        stdout, stderr = p.communicate()
+        stdout_ = stdout.decode()
+        stderr_ = stderr.decode()
+        if p.returncode == 0:
+            return True
+        else:
+            Logger.error('borg returned with non-zero exitcode')
+            if stdout_ or stderr_:
+                for line in (stdout_ + stderr_).splitlines(keepends=False):
+                    Logger.error(line)
+            return False
 
     def status(self):
         last = self.get_last_archive_datetime()

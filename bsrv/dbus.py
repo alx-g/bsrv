@@ -45,6 +45,23 @@ class DBusInterface(object):
             else:
                 return self.scheduler.schedule(job, datetime.datetime.now())
 
+    def MountRepo(self, job_name: Str) -> Str:
+        job = self.scheduler.find_job_by_name(job_name)
+        if not job:
+            return ''
+        else:
+            if job.mount():
+                return job.mount_dir
+            else:
+                return ''
+
+    def UMountRepo(self, job_name: Str) -> Bool:
+        job = self.scheduler.find_job_by_name(job_name)
+        if not job:
+            return False
+        else:
+            return job.umount()
+
     def Shutdown(self):
         Logger.info('Received Shutdown command via DBus')
         self.exit_signal.emit()

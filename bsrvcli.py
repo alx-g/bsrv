@@ -18,6 +18,10 @@ def main():
                          help='Display status of job with given name.')
     m_group.add_argument('-r', '--run', metavar='JOB_NAME', default=None, action='store', type=str,
                          help='Manually run a job now. This may have an influence on future scheduled actions for this job.')
+    m_group.add_argument('-m', '--mount', metavar='JOB_NAME', action='store', default=None, type=str,
+                         help='Mount repository for given job using "borg mount"')
+    m_group.add_argument('-u', '--umount', metavar='JOB_NAME', action='store', default=None, type=str,
+                         help='UMount repository for given job using "borg umount"')
     m_group.add_argument('--shutdown', action='store_true', default=False, help='Shutdown daemon')
 
     parser.add_argument('--json', action='store_true', default=False,
@@ -38,7 +42,7 @@ def main():
                 print('bsrvd has currently loaded the following jobs:')
                 for job in jobs:
                     print(job)
-        elif args.status is not None:
+        elif args.status:
             status = proxy.GetJobStatus(args.status)
             if not status:
                 print('bsrvd has no job loaded with the name "{}"'.format(args.status))
@@ -73,6 +77,15 @@ def main():
                 print('+' + '=' * 78 + '+')
         elif args.run:
             if not proxy.RunJob(args.run):
+                sys.exit(1)
+        elif args.mount:
+            ret = proxy.MountRepo(args.mount)
+            if not ret:
+                sys.exit(1)
+            else:
+                print(ret)
+        elif args.umount:
+            if not proxy.UMountRepo(args.umount):
                 sys.exit(1)
         elif args.shutdown:
             proxy.Shutdown()
