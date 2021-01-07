@@ -4,11 +4,12 @@ import signal
 from dasbus.connection import SessionMessageBus
 from dasbus.identifier import DBusServiceIdentifier
 from dasbus.loop import EventLoop
-from dasbus.server.interface import dbus_interface
+from dasbus.server.interface import dbus_interface, dbus_signal
 from dasbus.signal import Signal
-from dasbus.typing import Str, List, Dict, Bool
+from dasbus.typing import Str, List, Dict, Bool, Int
 
 from .logger import Logger
+from .job import Scheduler
 
 SESSION_BUS = SessionMessageBus()
 
@@ -20,10 +21,13 @@ SERVICE_IDENTIFIER = DBusServiceIdentifier(
 
 @dbus_interface(SERVICE_IDENTIFIER.interface_name)
 class DBusInterface(object):
-    def __init__(self, scheduler, exit_signal):
+    def __init__(self, scheduler):
         self.scheduler = scheduler
-        self.exit_signal = exit_signal
         super(DBusInterface, self).__init__()
+
+    @dbus_signal
+    def StatusUpdateNotifier(self, job_name: Str, scheduler_status: Str, retry: Int):
+        pass
 
     def GetLoadedJobs(self) -> List[Str]:
         return [job.name for job in self.scheduler.jobs]
@@ -68,10 +72,10 @@ class DBusInterface(object):
 
 
 class MainLoop:
-    def __init__(self, scheduler):
-        self.exit_signal = Signal()
-        self.exit_signal.connect(self.stop)
-        self.interface = DBusInterface(scheduler=scheduler, exit_signal=self.exit_signal)
+    def __init__(self, scheduler: Scheduler):
+        self.interface = DBusInterface(scheduler=scheduler)
+        self.scheduler = scheduler
+        self.scheduler.status_update_callback = self.__status_update_handler
         self.loop = EventLoop()
 
     def start(self):
@@ -86,6 +90,9 @@ class MainLoop:
     def __sigterm_handler(self, signal_number, frame):
         Logger.info('Received SIGTERM')
         self.stop()
+
+    def __status_update_handler(self, job_name: str, scheduler_status: str, retry: int):
+        self.interface.StatusUpdateNotifier(job_name, scheduler_status, retry)
 
     def stop(self):
         self.loop.quit()

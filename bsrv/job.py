@@ -68,7 +68,7 @@ class Job:
         self.retry_max: int = retry_max
         self.retry_count: int = 0
         self.last_archive_date = Cache.get('job_{}_last_dt'.format(self.name))
-        self.mount_dir = os.path.join(Config.get('borg', 'mount_dir', fallback='/tmp/bsrvd-mount'),self.name)
+        self.mount_dir = os.path.join(Config.get('borg', 'mount_dir', fallback='/tmp/bsrvd-mount'), self.name)
 
     def __eq__(self, other):
         return other.name == self.name
@@ -355,11 +355,13 @@ class Scheduler:
         self.timer_event: threading.Event = threading.Event()
         self.timer_reason: WakeupReason = WakeupReason.TIMER
         self.main_thread: threading.Thread = threading.Thread(target=self.scheduler_thread)
-        self.jobs_running: Dict[int, threading.Thread] = {}
+        self.threads_running: Dict[int, threading.Thread] = {}
+        self.jobs_running: List[Job] = []
         self.jobs_running_lock: threading.Lock = threading.Lock()
         self.running: bool = False
         self.next_dt: Union[datetime.datetime, None] = None
         self.next_jobs: List[Job] = []
+        self.status_update_callback = lambda job_name, sched_status, retry: []
 
     def find_job_by_name(self, job_name: str) -> Union[None, Job]:
         list_of_jobs = [job.name for job in self.jobs]
@@ -374,6 +376,9 @@ class Scheduler:
     def get_job_status(self, job: Job) -> Dict[str, str]:
         job_status = job.status()
 
+        if job in self.jobs_running:
+            job_status['schedule_status'] = 'running'
+            job_status['schedule_dt'] = 'now'
         if job in self.next_jobs:
             job_status['schedule_status'] = 'next'
             job_status['schedule_dt'] = self.next_dt.isoformat()
@@ -446,6 +451,8 @@ class Scheduler:
                 break
 
             self.next_dt, self.next_jobs = self.queue.get_next_action()
+            for job in self.next_jobs:
+                self.status_update_callback(job.name, 'next', job.retry_count)
 
             if self.next_dt is not None:
                 sleep_time = max(0.0, (self.next_dt - datetime.datetime.now()).total_seconds())
@@ -473,6 +480,7 @@ class Scheduler:
                 while self.next_jobs:
                     job = self.next_jobs.pop()
                     self.queue.put(job, self.next_dt)
+                    self.status_update_callback(job.name, 'wait', job.retry_count)
                 continue
             elif self.timer_reason == WakeupReason.TIMER:
                 Logger.debug('[Scheduler] Wakeup due to timer, launching jobs...')
@@ -484,7 +492,9 @@ class Scheduler:
                 thread = threading.Thread(target=self.job_thread, args=(job,))
                 thread.start()
                 with self.jobs_running_lock:
-                    self.jobs_running[thread.ident] = thread
+                    self.threads_running[thread.ident] = thread
+                    self.jobs_running.append(job)
+                self.status_update_callback(job.name, 'running', job.retry_count)
 
             self.timer_event.clear()
         Logger.debug('[Scheduler] Exit thread')
@@ -506,9 +516,11 @@ class Scheduler:
                 job.retry_count = 0
 
             job.set_last_archive_datetime(datetime.datetime.now())
-            with self.jobs_running_lock:
-                del self.jobs_running[threading.get_ident()]
             self.queue.put(job, job.get_next_archive_datetime())
+            with self.jobs_running_lock:
+                del self.threads_running[threading.get_ident()]
+                self.jobs_running.remove(job)
+            self.status_update_callback(job.name, 'wait', job.retry_count)
         else:
             give_up = job.retry_count >= job.retry_max
             if job.retry_count > 0:
@@ -530,9 +542,6 @@ class Scheduler:
                         job.retry_count = 0
                     job.retry_count += 1
 
-            with self.jobs_running_lock:
-                del self.jobs_running[threading.get_ident()]
-
             if not give_up:
                 scheduled_retry_dt = datetime.datetime.now() + datetime.timedelta(seconds=job.retry_delay)
                 Logger.debug('[JOB] Retry for job "{}" scheduled in {}'.format(job.name, datetime.timedelta(
@@ -541,6 +550,12 @@ class Scheduler:
             else:
                 scheduled_next_dt = job.get_next_archive_datetime(datetime.datetime.now())
                 self.queue.put(job, scheduled_next_dt)
+
+            with self.jobs_running_lock:
+                del self.threads_running[threading.get_ident()]
+                self.jobs_running.remove(job)
+
+            self.status_update_callback(job.name, 'wait', job.retry_count)
 
 
 class Schedule:

@@ -14,7 +14,7 @@ setuptools.setup(
     url="",
     license="BSD 3-Clause",
     packages=setuptools.find_packages(),
-    py_modules=["bsrvd", "bsrvcli"],
+    py_modules=["bsrvd", "bsrvcli", "bsrvtray"],
     classifiers=[
         # How mature is this project? Common values are
         #   3 - Alpha
@@ -40,7 +40,8 @@ setuptools.setup(
     entry_points={
         'console_scripts': [
             'bsrvd=bsrvd:main',
-            'bsrvcli=bsrvcli:main'
+            'bsrvcli=bsrvcli:main',
+            'bsrvtray=bsrvtray:main'
         ],
     },
 )
