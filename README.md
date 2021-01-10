@@ -8,6 +8,10 @@
 
 `bsrvcli` can be used to retrieve status infos and control the daemon's behavior manually.
 
+## Tray Symbol
+
+`bsrvtray` connects to the daemon via DBus, gives a status overview and allows similar functionality to the cli client from a tray menu
+
 ## Dependencies
 
 ### System
@@ -28,6 +32,7 @@ Also, the service relies on `dbus` to provide the interface for `bsrvcli` and ot
 * **dasbus**
 * **pygobject**
 * **systemd-logging**
+* **pyqt5** (only necessary for `bsrvtray`)
 
 ## Development environment setup
 
