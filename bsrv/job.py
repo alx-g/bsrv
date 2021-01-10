@@ -2,18 +2,19 @@ import configparser
 import datetime
 import enum
 import os
+import pathlib
 import re
 import shlex
 import subprocess
 import threading
 import time
-import pathlib
 from calendar import monthrange
 from collections import OrderedDict
 from typing import *
 
-from .config import Config
 from .cache import Cache
+from .config import Config
+from .hook import Hook
 from .logger import Logger
 from .tools import parse_json
 
@@ -22,6 +23,63 @@ class Job:
     @staticmethod
     def from_config(cfg_section: str):
         try:
+            hook_timeout = Config.getint('borg', 'hook_timeout', fallback=20)
+
+            hook_list_failed = Hook(
+                'hook_list_failed',
+                Config.get(cfg_section, 'hook_list_failed',
+                           fallback=Config.get('borg', 'hook_list_failed', fallback='')),
+                timeout=hook_timeout
+            )
+            hook_list_successful = Hook(
+                'hook_list_successful',
+                Config.get(cfg_section, 'hook_list_successful',
+                           fallback=Config.get('borg', 'hook_list_successful', fallback='')),
+                timeout=hook_timeout
+            )
+            hook_mount_failed = Hook(
+                'hook_mount_failed',
+                Config.get(cfg_section, 'hook_mount_failed',
+                           fallback=Config.get('borg', 'hook_mount_failed', fallback='')),
+                timeout=hook_timeout
+            )
+            hook_mount_successful = Hook(
+                'hook_mount_successful',
+                Config.get(cfg_section, 'hook_mount_successful',
+                           fallback=Config.get('borg', 'hook_mount_successful', fallback='')),
+                timeout=hook_timeout
+            )
+            hook_umount_failed = Hook(
+                'hook_umount_failed',
+                Config.get(cfg_section, 'hook_umount_failed',
+                           fallback=Config.get('borg', 'hook_umount_failed', fallback='')),
+                timeout=hook_timeout
+            )
+            hook_umount_successful = Hook(
+                'hook_umount_successful',
+                Config.get(cfg_section, 'hook_umount_successful',
+                           fallback=Config.get('borg', 'hook_umount_successful', fallback='')),
+                timeout=hook_timeout
+            )
+            hook_run_failed = Hook(
+                'hook_run_failed',
+                Config.get(cfg_section, 'hook_run_failed',
+                           fallback=Config.get('borg', 'hook_run_failed', fallback='')),
+                timeout=hook_timeout
+            )
+            hook_run_successful = Hook(
+                'hook_run_successful',
+                Config.get(cfg_section, 'hook_run_successful',
+                           fallback=Config.get('borg', 'hook_run_successful', fallback='')),
+                timeout=hook_timeout
+            )
+            hook_give_up = Hook(
+                'hook_give_up',
+                Config.get(cfg_section, 'hook_give_up',
+                           fallback=Config.get('borg', 'hook_give_up', fallback='')),
+                timeout=hook_timeout
+            )
+
             return Job(
                 name=cfg_section,
                 borg_repo=Config.get(cfg_section, 'borg_repo'),
@@ -33,7 +91,16 @@ class Job:
                 borg_create_args=shlex.split(Config.get(cfg_section, 'borg_create_args')),
                 schedule=Schedule(Config.get(cfg_section, 'schedule')),
                 retry_delay=Config.getint(cfg_section, 'retry_delay', fallback=60),
-                retry_max=Config.getint(cfg_section, 'retry_max', fallback=3)
+                retry_max=Config.getint(cfg_section, 'retry_max', fallback=3),
+                hook_list_failed=hook_list_failed,
+                hook_list_successful=hook_list_successful,
+                hook_mount_failed=hook_mount_failed,
+                hook_mount_successful=hook_mount_successful,
+                hook_umount_failed=hook_umount_failed,
+                hook_umount_successful=hook_umount_successful,
+                hook_run_failed=hook_run_failed,
+                hook_run_successful=hook_run_successful,
+                hook_give_up=hook_give_up
             )
         except ScheduleParseError:
             Logger.error('Error in config file: Invalid schedule specification for job "{}"'.format(cfg_section))
@@ -53,6 +120,15 @@ class Job:
             schedule,
             retry_delay,
             retry_max,
+            hook_list_failed: Hook,
+            hook_list_successful: Hook,
+            hook_mount_failed: Hook,
+            hook_mount_successful: Hook,
+            hook_umount_failed: Hook,
+            hook_umount_successful: Hook,
+            hook_run_failed: Hook,
+            hook_run_successful: Hook,
+            hook_give_up: Hook,
             borg_archive_name_template="%Y-%m-%d_%H-%M-%S",
             borg_rsh='ssh'
     ):
@@ -69,6 +145,25 @@ class Job:
         self.retry_count: int = 0
         self.last_archive_date = Cache.get('job_{}_last_dt'.format(self.name))
         self.mount_dir = os.path.join(Config.get('borg', 'mount_dir', fallback='/tmp/bsrvd-mount'), self.name)
+
+        self.hook_list_failed: 'Hook' = hook_list_failed
+        self.hook_list_failed.set_parent(self)
+        self.hook_list_successful: 'Hook' = hook_list_successful
+        self.hook_list_successful.set_parent(self)
+        self.hook_mount_failed: 'Hook' = hook_mount_failed
+        self.hook_mount_failed.set_parent(self)
+        self.hook_mount_successful: 'Hook' = hook_mount_successful
+        self.hook_mount_successful.set_parent(self)
+        self.hook_umount_failed: 'Hook' = hook_umount_failed
+        self.hook_umount_failed.set_parent(self)
+        self.hook_umount_successful: 'Hook' = hook_umount_successful
+        self.hook_umount_successful.set_parent(self)
+        self.hook_run_failed: 'Hook' = hook_run_failed
+        self.hook_run_failed.set_parent(self)
+        self.hook_run_successful: 'Hook' = hook_run_successful
+        self.hook_run_successful.set_parent(self)
+        self.hook_give_up: 'Hook' = hook_give_up
+        self.hook_give_up.set_parent(self)
 
     def __eq__(self, other):
         return other.name == self.name
@@ -108,6 +203,7 @@ class Job:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.error('[JOB] ' + line)
             Logger.warn('[JOB] skipping borg prune due to previous error')
+            self.hook_run_failed.trigger()
             return False
 
         params = [Config.get('borg', 'binary', fallback='borg'), 'prune'] + self.borg_prune_args
@@ -129,12 +225,14 @@ class Job:
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.info('[JOB] ' + line)
+            self.hook_run_successful.trigger()
             return True
         else:
             Logger.error('[JOB] borg returned with non-zero exitcode')
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.error('[JOB] ' + line)
+            self.hook_run_failed.trigger()
             return False
 
     def get_last_archive_datetime(self):
@@ -152,11 +250,11 @@ class Job:
         else:
             return self.last_archive_date
 
-    def set_last_archive_datetime(self, dt: datetime.datetime):
+    def set_last_archive_datetime(self, dt: 'datetime.datetime'):
         self.last_archive_date = dt
         Cache.set('job_{}_last_dt'.format(self.name), dt)
 
-    def get_next_archive_datetime(self, last: Union[None, datetime.datetime] = None):
+    def get_next_archive_datetime(self, last: Union[None, 'datetime.datetime'] = None):
         if last is None:
             last = self.get_last_archive_datetime()
         if last is not None:
@@ -186,12 +284,19 @@ class Job:
         stdout_ = stdout.decode()
         stderr_ = stderr.decode()
         if p.returncode == 0:
-            return parse_json(stdout_)['archives']
+            try:
+                borg_archives = parse_json(stdout_)['archives']
+                self.hook_list_successful.trigger()
+                return borg_archives
+            except Exception:
+                self.hook_list_failed.trigger()
+                Logger.error('borg returned non-parsable json')
         else:
             Logger.error('borg returned with non-zero exitcode')
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.error(line)
+            self.hook_list_failed.trigger()
             return None
 
     def mount(self):
@@ -216,12 +321,14 @@ class Job:
         stdout_ = stdout.decode()
         stderr_ = stderr.decode()
         if p.returncode == 0:
+            self.hook_mount_successful.trigger()
             return True
         else:
             Logger.error('borg returned with non-zero exitcode')
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.error(line)
+            self.hook_mount_failed.trigger()
             return False
 
     def umount(self):
@@ -243,12 +350,14 @@ class Job:
         stdout_ = stdout.decode()
         stderr_ = stderr.decode()
         if p.returncode == 0:
+            self.hook_umount_successful.trigger()
             return True
         else:
             Logger.error('borg returned with non-zero exitcode')
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.error(line)
+            self.hook_umount_failed.trigger()
             return False
 
     def status(self):
@@ -266,8 +375,8 @@ class ScheduleParseError(Exception):
 
 class SchedulerQueue:
     def __init__(self):
-        self.waiting: OrderedDict = OrderedDict()
-        self.lock: threading.Lock = threading.Lock()
+        self.waiting: 'OrderedDict' = OrderedDict()
+        self.lock: 'threading.Lock' = threading.Lock()
         self.hook_update = lambda: []
 
     def set_update_hook(self, func):
@@ -276,7 +385,7 @@ class SchedulerQueue:
     def __reorder(self):
         self.waiting = OrderedDict((key, self.waiting[key]) for key in sorted(self.waiting.keys()))
 
-    def when(self, elem: Any) -> Union[None, datetime.datetime]:
+    def when(self, elem: Any) -> Union[None, 'datetime.datetime']:
         for this_dt, this_elems in self.waiting.items():
             for k in range(len(this_elems)):
                 this_elem = this_elems[k]
@@ -285,7 +394,7 @@ class SchedulerQueue:
 
         return None
 
-    def put(self, elem: Any, dt: datetime.datetime, hook_enabled: bool = True) -> NoReturn:
+    def put(self, elem: Any, dt: 'datetime.datetime', hook_enabled: bool = True) -> NoReturn:
         with self.lock:
             if dt in self.waiting.keys():
                 self.waiting[dt].append(elem)
@@ -317,17 +426,17 @@ class SchedulerQueue:
 
         return found
 
-    def move(self, elem: Any, dt: datetime.datetime, hook_enabled: bool = True) -> bool:
+    def move(self, elem: Any, dt: 'datetime.datetime', hook_enabled: bool = True) -> bool:
         if self.delete(elem, hook_enabled=False):
             self.put(elem, dt, hook_enabled=hook_enabled)
             return True
         else:
             return False
 
-    def get_waiting(self) -> OrderedDict:
+    def get_waiting(self) -> 'OrderedDict':
         return self.waiting
 
-    def get_next_action(self) -> Tuple[Union[None, datetime.datetime], List[Any]]:
+    def get_next_action(self) -> Tuple[Union[None, 'datetime.datetime'], List[Any]]:
         with self.lock:
             try:
                 dt, items = self.waiting.popitem(last=False)
@@ -348,22 +457,22 @@ class WakeupReason(enum.Enum):
 
 class Scheduler:
     def __init__(self):
-        self.jobs: List[Job] = []
-        self.queue: SchedulerQueue[Job] = SchedulerQueue()
+        self.jobs: List['Job'] = []
+        self.queue: 'SchedulerQueue' = SchedulerQueue()
         self.queue.set_update_hook(self.__update_wakeup)
-        self.timer: Union[None, threading.Timer] = None
-        self.timer_event: threading.Event = threading.Event()
-        self.timer_reason: WakeupReason = WakeupReason.TIMER
-        self.main_thread: threading.Thread = threading.Thread(target=self.scheduler_thread)
-        self.threads_running: Dict[int, threading.Thread] = {}
-        self.jobs_running: List[Job] = []
-        self.jobs_running_lock: threading.Lock = threading.Lock()
+        self.timer: Union[None, 'threading.Timer'] = None
+        self.timer_event: 'threading.Event' = threading.Event()
+        self.timer_reason: 'WakeupReason' = WakeupReason.TIMER
+        self.main_thread: 'threading.Thread' = threading.Thread(target=self.scheduler_thread)
+        self.threads_running: Dict[int, 'threading.Thread'] = {}
+        self.jobs_running: List['Job'] = []
+        self.jobs_running_lock: 'threading.Lock' = threading.Lock()
         self.running: bool = False
-        self.next_dt: Union[datetime.datetime, None] = None
-        self.next_jobs: List[Job] = []
+        self.next_dt: Union['datetime.datetime', None] = None
+        self.next_jobs: List['Job'] = []
         self.status_update_callback = lambda job_name, sched_status, retry: []
 
-    def find_job_by_name(self, job_name: str) -> Union[None, Job]:
+    def find_job_by_name(self, job_name: str) -> Union[None, 'Job']:
         list_of_jobs = [job.name for job in self.jobs]
         if not job_name in list_of_jobs:
             return None
@@ -373,7 +482,7 @@ class Scheduler:
             except (IndexError, KeyError):
                 return None
 
-    def get_job_status(self, job: Job) -> Dict[str, str]:
+    def get_job_status(self, job: 'Job') -> Dict[str, str]:
         job_status = job.status()
 
         if job in self.jobs_running:
@@ -393,20 +502,20 @@ class Scheduler:
 
         return job_status
 
-    def schedule(self, job: Job, dt: datetime.datetime, hook_enabled: bool = True) -> bool:
+    def schedule(self, job: 'Job', dt: 'datetime.datetime', hook_enabled: bool = True) -> bool:
         if job not in self.jobs:
             return False
         else:
             self.queue.put(job, dt, hook_enabled=hook_enabled)
             return True
 
-    def unschedule(self, job: Job) -> bool:
+    def unschedule(self, job: 'Job') -> bool:
         if job not in self.jobs:
             return False
         else:
             return self.queue.delete(job)
 
-    def register(self, job: Job) -> NoReturn:
+    def register(self, job: 'Job') -> NoReturn:
         self.jobs.append(job)
         next_dt = job.get_next_archive_datetime()
         if next_dt is None:
@@ -417,7 +526,7 @@ class Scheduler:
             else:
                 Logger.error('[Scheduler] Could not register job "{}", unknown error'.format(job.name))
 
-    def advance_to_now(self, job: Job) -> bool:
+    def advance_to_now(self, job: 'Job') -> bool:
         if job in self.next_jobs:
             self.next_jobs.remove(job)
             self.queue.put(job, datetime.datetime.now())
@@ -499,7 +608,7 @@ class Scheduler:
             self.timer_event.clear()
         Logger.debug('[Scheduler] Exit thread')
 
-    def job_thread(self, job: Job) -> NoReturn:
+    def job_thread(self, job: 'Job') -> NoReturn:
         if job.retry_count > 0:
             Logger.info('[JOB] Launching retry {} for job "{}"...'.format(job.retry_count, job.name))
         else:
@@ -548,6 +657,7 @@ class Scheduler:
                     seconds=job.retry_delay)))
                 self.queue.put(job, scheduled_retry_dt)
             else:
+                job.hook_give_up.trigger()
                 scheduled_next_dt = job.get_next_archive_datetime(datetime.datetime.now())
                 self.queue.put(job, scheduled_next_dt)
 
@@ -575,7 +685,7 @@ class Schedule:
 
         self.cron_type_expr = re.compile(r'^(?P<fixed>\d+(-\d+)?(,\d+(-\d+)?)*)|(?P<div>\*/\d+)|(?P<all>\*)$')
 
-        self.interval: Union[None, datetime.timedelta] = None
+        self.interval: Union[None, 'datetime.timedelta'] = None
         self.crontab: Union[None, Dict[str, Iterable[int]]] = None
 
         match = weekly_expr.fullmatch(txt)
@@ -652,7 +762,7 @@ class Schedule:
 
         return vals
 
-    def next(self, last: datetime.datetime) -> datetime.datetime:
+    def next(self, last: 'datetime.datetime') -> 'datetime.datetime':
         if self.interval is not None:
             return last + self.interval
         elif self.crontab is not None:

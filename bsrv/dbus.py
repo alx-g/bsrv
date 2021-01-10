@@ -1,15 +1,17 @@
 import datetime
 import signal
+from typing import TYPE_CHECKING
 
 from dasbus.connection import SessionMessageBus
 from dasbus.identifier import DBusServiceIdentifier
 from dasbus.loop import EventLoop
 from dasbus.server.interface import dbus_interface, dbus_signal
-from dasbus.signal import Signal
 from dasbus.typing import Str, List, Dict, Bool, Int
 
 from .logger import Logger
-from .job import Scheduler
+
+if TYPE_CHECKING:
+    from .job import Scheduler
 
 SESSION_BUS = SessionMessageBus()
 
@@ -72,7 +74,7 @@ class DBusInterface(object):
 
 
 class MainLoop:
-    def __init__(self, scheduler: Scheduler):
+    def __init__(self, scheduler: 'Scheduler'):
         self.interface = DBusInterface(scheduler=scheduler)
         self.scheduler = scheduler
         self.scheduler.status_update_callback = self.__status_update_handler

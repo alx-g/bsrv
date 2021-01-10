@@ -1,8 +1,7 @@
 import configparser
-import sys
 import os
 import pathlib
-
+import sys
 from typing import List
 
 from .logger import Logger, LogTarget
@@ -54,4 +53,3 @@ class Config(metaclass=ConfigMeta):
                 Logger.critical('Cannot write to "{}"'.format(path))
         if failed:
             sys.exit(33)
-

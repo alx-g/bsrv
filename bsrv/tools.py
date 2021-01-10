@@ -1,19 +1,18 @@
 import datetime
 import json
-from typing import Dict
 
 
-def parse_json(json_source):
+def parse_json(json_source: str):
     source = json.loads(json_source)
     return json_iso2datetime(source)
 
 
-def gen_json(obj: Dict):
+def gen_json(obj: dict):
     obj = json_datetime2iso(obj)
     return json.dumps(obj)
 
 
-def json_datetime2iso(obj):
+def json_datetime2iso(obj: dict):
     for k, v in obj.items():
         if isinstance(v, list):
             for a in v:
@@ -25,7 +24,7 @@ def json_datetime2iso(obj):
     return obj
 
 
-def json_iso2datetime(source):
+def json_iso2datetime(source: dict):
     for k, v in source.items():
         if isinstance(v, list):
             for a in v:
