@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=de.alxg.bsrvd
+Exec=/bin/false
+User=root
+SystemdService=bsrvd.service

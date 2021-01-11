@@ -2,7 +2,7 @@ import datetime
 import signal
 from typing import TYPE_CHECKING
 
-from dasbus.connection import SessionMessageBus
+from dasbus.connection import SessionMessageBus, SystemMessageBus
 from dasbus.identifier import DBusServiceIdentifier
 from dasbus.loop import EventLoop
 from dasbus.server.interface import dbus_interface, dbus_signal
@@ -13,15 +13,23 @@ from .logger import Logger
 if TYPE_CHECKING:
     from .job import Scheduler
 
+SYSTEM_BUS = SystemMessageBus()
 SESSION_BUS = SessionMessageBus()
 
-SERVICE_IDENTIFIER = DBusServiceIdentifier(
-    namespace=("de", "alxg", "borgsrvd"),
-    message_bus=SESSION_BUS
+TMP_SERVICE_IDENTIFIER = DBusServiceIdentifier(
+    namespace=("de", "alxg", "bsrvd"),
+    message_bus=None
 )
 
 
-@dbus_interface(SERVICE_IDENTIFIER.interface_name)
+def get_dbus_service_identifier(message_bus):
+    return DBusServiceIdentifier(
+        namespace=TMP_SERVICE_IDENTIFIER.namespace,
+        message_bus=message_bus
+    )
+
+
+@dbus_interface(TMP_SERVICE_IDENTIFIER.interface_name)
 class DBusInterface(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
@@ -70,24 +78,25 @@ class DBusInterface(object):
 
     def Shutdown(self):
         Logger.info('Received Shutdown command via DBus')
-        self.exit_signal.emit()
 
 
 class MainLoop:
-    def __init__(self, scheduler: 'Scheduler'):
+    def __init__(self, scheduler: 'Scheduler', bus=SYSTEM_BUS):
         self.interface = DBusInterface(scheduler=scheduler)
         self.scheduler = scheduler
         self.scheduler.status_update_callback = self.__status_update_handler
+        self.bus = bus
+        self.service_identifier = get_dbus_service_identifier(bus)
         self.loop = EventLoop()
 
     def start(self):
-        SESSION_BUS.publish_object(SERVICE_IDENTIFIER.object_path, self.interface)
-        SESSION_BUS.register_service(SERVICE_IDENTIFIER.service_name)
+        self.bus.publish_object(self.service_identifier.object_path, self.interface)
+        self.bus.register_service(self.service_identifier.service_name)
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
         try:
             self.loop.run()
         finally:
-            SESSION_BUS.disconnect()
+            self.bus.disconnect()
 
     def __sigterm_handler(self, signal_number, frame):
         Logger.info('Received SIGTERM')

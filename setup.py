@@ -4,11 +4,11 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="bsrv", # Replace with your own username
-    version="0.0.1a1",
+    name="bsrv",
+    version="0.0.1a2",
     author="Alexander Grathwohl",
     author_email="alex.grathwohl@gmail.com",
-    description="Linux daemon to manage periodic borg backups ",
+    description="Linux daemon to manage periodic borg backups",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="",
@@ -44,4 +44,8 @@ setuptools.setup(
             'bsrvtray=bsrvtray:main'
         ],
     },
+    package_data={'bsrv': ['icons/*']},
+    data_files=[('share/dbus-1/system-services', ['configs/dbus/de.alxg.bsrvd.service']),
+                ('share/dbus-1/system.d', ['configs/dbus/de.alxg.bsrvd.conf']),
+                ('lib/systemd/system', ['configs/systemd/bsrvd.service'])]
 )

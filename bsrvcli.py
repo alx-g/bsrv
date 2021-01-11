@@ -6,7 +6,7 @@ import time
 
 from dasbus.error import DBusError
 
-from bsrv import SERVICE_IDENTIFIER
+from bsrv import SYSTEM_BUS, SESSION_BUS, get_dbus_service_identifier
 
 
 def main():
@@ -24,13 +24,20 @@ def main():
                          help='UMount repository for given job using "borg umount"')
     m_group.add_argument('--shutdown', action='store_true', default=False, help='Shutdown daemon')
 
+    parser.add_argument('--session-bus', action='store_true', default=False,
+                        help='Connect to daemon dbus interface via SESSION_BUS, default is SYSTEM_BUS')
+
     parser.add_argument('--json', action='store_true', default=False,
                         help='Instead of outputting nicely formatted data, output data as JSON')
 
     args = parser.parse_args()
 
     try:
-        proxy = SERVICE_IDENTIFIER.get_proxy()
+        if args.session_bus:
+            service_identifier = get_dbus_service_identifier(SESSION_BUS)
+        else:
+            service_identifier = get_dbus_service_identifier(SYSTEM_BUS)
+        proxy = service_identifier.get_proxy()
         if not proxy:
             sys.exit(1)
 
@@ -101,8 +108,9 @@ def main():
             except DBusError:
                 sys.exit(0)
 
-    except DBusError:
+    except DBusError as e:
         print('Could not connect to daemon, is it running?')
+        print(str(e))
         sys.exit(1)
 
 

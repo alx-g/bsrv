@@ -2,7 +2,7 @@
 import argparse
 import os
 
-from bsrv import Config, Logger, Job, Scheduler, MainLoop, Cache
+from bsrv import Config, Logger, Job, Scheduler, MainLoop, Cache, SESSION_BUS, SYSTEM_BUS
 
 
 def main():
@@ -10,6 +10,8 @@ def main():
     parser = argparse.ArgumentParser(description='Borg Service daemon.')
     parser.add_argument('-c', metavar='CONFIGFILE', action='store', default='/etc/bsrvd.conf', type=str,
                         help='Path to configuration file.')
+    parser.add_argument('--session-bus', action='store_true', default=False,
+                        help='Use SESSION_BUS to publish dbus interface. Default is SYSTEM_BUS.')
 
     args = parser.parse_args()
 
@@ -40,8 +42,10 @@ def main():
                 if newjob:
                     scheduler.register(newjob)
 
-        # setup DBUS interface
-        loop = MainLoop(scheduler=scheduler)
+        if args.session_bus:
+            loop = MainLoop(scheduler=scheduler, bus=SESSION_BUS)
+        else:
+            loop = MainLoop(scheduler=scheduler, bus=SYSTEM_BUS)
 
     except SystemExit as e:
         if e.code == 0:

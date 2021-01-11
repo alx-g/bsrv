@@ -1,0 +1,11 @@
+[Unit]
+Description=Borg Backup Service Daemon
+
+[Service]
+Type=dbus
+BusName=de.alxg.bsrvd
+ExecStart=/usr/bin/bsrvd
+
+[Install]
+WantedBy=multi-user.target
+

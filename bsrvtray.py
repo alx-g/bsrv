@@ -2,6 +2,8 @@
 import logging
 import os
 import sys
+import argparse
+from pkg_resources import resource_filename
 from typing import Dict
 
 from PyQt5.QtCore import QTimer, QMutex, QMutexLocker
@@ -9,7 +11,9 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication
 from dasbus.error import DBusError
 
-from bsrv import SERVICE_IDENTIFIER
+from bsrv import SYSTEM_BUS, SESSION_BUS, get_dbus_service_identifier
+
+DATA_PACKAGE_NAME = 'bsrv'
 
 
 class Status:
@@ -23,7 +27,8 @@ class Status:
 class MainApp:
     def __init__(
             self,
-            qapp
+            qapp,
+            dbus_service_identifier
     ):
         self.proxy = None
 
@@ -38,35 +43,37 @@ class MainApp:
         self.qapp: QApplication = qapp
 
         # Save reference to dbus interface identifier
-        self.dbus_service_identifier = SERVICE_IDENTIFIER
+        self.dbus_service_identifier = dbus_service_identifier
+
+        self.log.critical(resource_filename(DATA_PACKAGE_NAME, "icons/icon_noconnection.png"))
 
         # Load all tray icon files
         self.icon_noconnection = [
-            QIcon("icons/icon_noconnection.png"),
-            QIcon("icons/icon.png")
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_noconnection.png")),
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon.png"))
         ]
         self.icon_running = [
-            QIcon("icons/icon_running0.png"),
-            QIcon("icons/icon_running1.png"),
-            QIcon("icons/icon_running2.png"),
-            QIcon("icons/icon_running3.png"),
-            QIcon("icons/icon_running4.png"),
-            QIcon("icons/icon_running5.png"),
-            QIcon("icons/icon_running6.png"),
-            QIcon("icons/icon_running7.png")
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running0.png")),
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running1.png")),
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running2.png")),
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running3.png")),
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running4.png")),
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running5.png")),
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running6.png")),
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running7.png"))
         ]
-        self.icon_error = QIcon("icons/icon_error.png")
-        self.icon_ok = QIcon("icons/icon_ok.png")
-        self.icon_attention = QIcon("icons/icon_attention.png")
+        self.icon_error = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_error.png"))
+        self.icon_ok = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_ok.png"))
+        self.icon_attention = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_attention.png"))
 
         # Load icons for menu
-        self.micon_exit = QIcon("icons/micon_exit.png")
-        self.micon_info = QIcon("icons/micon_info.png")
-        self.micon_run = QIcon("icons/micon_run.png")
-        self.micon_mount = QIcon("icons/micon_mount.png")
-        self.micon_umount = QIcon("icons/micon_umount.png")
-        # self.micon_log = QIcon("icons/micon_log.png")
-        # self.micon_console = QIcon("icons/micon_console.png")
+        self.micon_exit = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_exit.png"))
+        self.micon_info = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_info.png"))
+        self.micon_run = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_run.png"))
+        self.micon_mount = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_mount.png"))
+        self.micon_umount = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_umount.png"))
+        # self.micon_log = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_log.png"))
+        # self.micon_console = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_console.png"))
 
         # Setup tray icon
         self.qapp.setQuitOnLastWindowClosed(False)
@@ -301,6 +308,17 @@ class MainApp:
 
 
 def main():
+    parser = argparse.ArgumentParser(description='bsrv tray icon')
+    parser.add_argument('--session-bus', action='store_true', default=False,
+                        help='Connect to daemon dbus interface via SESSION_BUS, default is SYSTEM_BUS')
+
+    args = parser.parse_args()
+
+    if args.session_bus:
+        service_identifier = get_dbus_service_identifier(SESSION_BUS)
+    else:
+        service_identifier = get_dbus_service_identifier(SYSTEM_BUS)
+
     script_dir = os.path.dirname(os.path.realpath(__file__))
     os.chdir(script_dir)
 
@@ -308,7 +326,7 @@ def main():
     qapp = QApplication(sys.argv)
 
     # Variable is necessary, otherwise the object will be cleared by garbage collection!
-    mapp = MainApp(qapp=qapp)
+    mapp = MainApp(qapp=qapp, dbus_service_identifier=service_identifier)
 
     # Run event loop
     sys.exit(qapp.exec_())

@@ -47,7 +47,7 @@ class Config(metaclass=ConfigMeta):
         failed = False
 
         for path in paths:
-            path.mkdir(mode=0o700, parents=True, exist_ok=True)
+            path.mkdir(mode=0o755, parents=True, exist_ok=True)
             if not os.access(path, os.R_OK | os.X_OK | os.W_OK):
                 failed = True
                 Logger.critical('Cannot write to "{}"'.format(path))
