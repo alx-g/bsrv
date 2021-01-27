@@ -19,6 +19,16 @@ from .logger import Logger
 from .tools import parse_json
 
 
+def every_expr2dt(match: re.Match) -> datetime.timedelta:
+    info = match.groupdict()
+    return datetime.timedelta(
+        weeks=int(info['weeks'] if info['weeks'] is not None else 0),
+        days=int(info['days'] if info['days'] is not None else 0),
+        hours=int(info['hours'] if info['hours'] is not None else 0),
+        minutes=int(info['minutes'] if info['minutes'] is not None else 0),
+    )
+
+
 class Job:
     @staticmethod
     def from_config(cfg_section: str):
@@ -80,6 +90,17 @@ class Job:
                 timeout=hook_timeout
             )
 
+            every_expr = re.compile(r'^\s*((?P<weeks>\d+)\s*w(eeks?)?)?'
+                                    r'\s*((?P<days>\d+)\s*d(ays?)?)?'
+                                    r'\s*((?P<hours>\d+)\s*h(ours?)?)?'
+                                    r'\s*((?P<minutes>\d+)\s*m(in(utes?)?)?)?\s*$', re.IGNORECASE)
+
+            match = every_expr.fullmatch(Config.get(cfg_section, 'stat_maxage', fallback=''))
+            if match:
+                stat_maxage = every_expr2dt(match)
+            else:
+                stat_maxage = None
+
             return Job(
                 name=cfg_section,
                 borg_repo=Config.get(cfg_section, 'borg_repo'),
@@ -92,6 +113,7 @@ class Job:
                 schedule=Schedule(Config.get(cfg_section, 'schedule')),
                 retry_delay=Config.getint(cfg_section, 'retry_delay', fallback=60),
                 retry_max=Config.getint(cfg_section, 'retry_max', fallback=3),
+                stat_maxage=stat_maxage,
                 hook_list_failed=hook_list_failed,
                 hook_list_successful=hook_list_successful,
                 hook_mount_failed=hook_mount_failed,
@@ -129,6 +151,7 @@ class Job:
             hook_run_failed: Hook,
             hook_run_successful: Hook,
             hook_give_up: Hook,
+            stat_maxage: Union[datetime.timedelta, None]=None,
             borg_archive_name_template="%Y-%m-%d_%H-%M-%S",
             borg_rsh='ssh'
     ):
@@ -145,6 +168,7 @@ class Job:
         self.retry_count: int = 0
         self.last_archive_date = Cache.get('job_{}_last_dt'.format(self.name))
         self.mount_dir = os.path.join(Config.get('borg', 'mount_dir', fallback='/tmp/bsrvd-mount'), self.name)
+        self.stat_maxage = stat_maxage
 
         self.hook_list_failed: 'Hook' = hook_list_failed
         self.hook_list_failed.set_parent(self)
@@ -199,11 +223,13 @@ class Job:
                     Logger.info('[JOB] ' + line)
         else:
             Logger.error('[JOB] borg returned with non-zero exitcode')
+            hook_lines = ''
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.error('[JOB] ' + line)
+                    hook_lines += line + '\\n'
             Logger.warn('[JOB] skipping borg prune due to previous error')
-            self.hook_run_failed.trigger()
+            self.hook_run_failed.trigger(env={'BSRV_JOB': self.name, 'BSRV_ERROR': hook_lines})
             return False
 
         params = [Config.get('borg', 'binary', fallback='borg'), 'prune'] + self.borg_prune_args
@@ -225,18 +251,20 @@ class Job:
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.info('[JOB] ' + line)
-            self.hook_run_successful.trigger()
+            self.hook_run_successful.trigger(env={'BSRV_JOB': self.name})
             return True
         else:
             Logger.error('[JOB] borg returned with non-zero exitcode')
+            hook_lines = ''
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.error('[JOB] ' + line)
-            self.hook_run_failed.trigger()
+                    hook_lines += line + '\\n'
+            self.hook_run_failed.trigger(env={'BSRV_JOB': self.name, 'BSRV_ERROR': hook_lines})
             return False
 
-    def get_last_archive_datetime(self):
-        if not self.last_archive_date:
+    def get_last_archive_datetime(self, use_cache: bool = True):
+        if not use_cache or not self.last_archive_date:
             list_of_archives = self.list_archives()
             if list_of_archives:
                 list_of_times = sorted([a['time'] for a in list_of_archives], reverse=True)
@@ -286,17 +314,22 @@ class Job:
         if p.returncode == 0:
             try:
                 borg_archives = parse_json(stdout_)['archives']
-                self.hook_list_successful.trigger()
+                self.hook_list_successful.trigger(env={'BSRV_JOB': self.name})
                 return borg_archives
             except Exception:
-                self.hook_list_failed.trigger()
+                hook_lines = ''
+                for line in stdout_.splitlines(keepends=False):
+                    hook_lines += line + '\\n'
+                self.hook_list_failed.trigger(env={'BSRV_JOB': self.name, 'BSRV_ERROR': hook_lines})
                 Logger.error('borg returned non-parsable json')
         else:
             Logger.error('borg returned with non-zero exitcode')
+            hook_lines = ''
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.error(line)
-            self.hook_list_failed.trigger()
+                    hook_lines += line + '\\n'
+            self.hook_list_failed.trigger(env={'BSRV_JOB': self.name, 'BSRV_ERROR': hook_lines})
             return None
 
     def mount(self):
@@ -321,14 +354,16 @@ class Job:
         stdout_ = stdout.decode()
         stderr_ = stderr.decode()
         if p.returncode == 0:
-            self.hook_mount_successful.trigger()
+            self.hook_mount_successful.trigger(env={'BSRV_JOB': self.name})
             return True
         else:
             Logger.error('borg returned with non-zero exitcode')
+            hook_lines = ''
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.error(line)
-            self.hook_mount_failed.trigger()
+                    hook_lines += line + '\\n'
+            self.hook_mount_failed.trigger(env={'BSRV_JOB': self.name, 'BSRV_ERROR': hook_lines})
             return False
 
     def umount(self):
@@ -350,14 +385,16 @@ class Job:
         stdout_ = stdout.decode()
         stderr_ = stderr.decode()
         if p.returncode == 0:
-            self.hook_umount_successful.trigger()
+            self.hook_umount_successful.trigger(env={'BSRV_JOB': self.name})
             return True
         else:
             Logger.error('borg returned with non-zero exitcode')
+            hook_lines = ''
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
                     Logger.error(line)
-            self.hook_umount_failed.trigger()
+                    hook_lines += line + '\\n'
+            self.hook_umount_failed.trigger(env={'BSRV_JOB': self.name, 'BSRV_ERROR': hook_lines})
             return False
 
     def status(self):
@@ -657,7 +694,7 @@ class Scheduler:
                     seconds=job.retry_delay)))
                 self.queue.put(job, scheduled_retry_dt)
             else:
-                job.hook_give_up.trigger()
+                job.hook_give_up.trigger(env={'BSRV_JOB': self.name})
                 scheduled_next_dt = job.get_next_archive_datetime(datetime.datetime.now())
                 self.queue.put(job, scheduled_next_dt)
 
@@ -705,13 +742,7 @@ class Schedule:
 
         match = every_expr.fullmatch(txt)
         if match:
-            info = match.groupdict()
-            self.interval = datetime.timedelta(
-                weeks=int(info['weeks'] if info['weeks'] is not None else 0),
-                days=int(info['days'] if info['days'] is not None else 0),
-                hours=int(info['hours'] if info['hours'] is not None else 0),
-                minutes=int(info['minutes'] if info['minutes'] is not None else 0),
-            )
+            self.interval = every_expr2dt(match)
             return
 
         match = cron_expr.fullmatch(txt)

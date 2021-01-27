@@ -11,9 +11,9 @@ class Cache:
     file = None
 
     @staticmethod
-    def initialize():
+    def initialize(name: str = 'bsrvd.cache'):
         base_dir = Config.get('borg', 'base_dir')
-        Cache.file = os.path.join(base_dir, 'bsrvd.cache')
+        Cache.file = os.path.join(base_dir, name)
         try:
             with open(Cache.file, 'r') as f:
                 cnt = f.read()

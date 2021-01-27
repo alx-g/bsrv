@@ -7,3 +7,4 @@ PyQt5-sip==12.8.1
 pytz==2020.5
 six==1.15.0
 systemd-logging==0.3.0
+texttable==1.6.3
