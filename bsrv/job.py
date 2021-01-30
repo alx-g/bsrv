@@ -490,6 +490,7 @@ class WakeupReason(enum.Enum):
     SHUTDOWN = enum.auto()
     TIMER = enum.auto()
     UPDATE = enum.auto()
+    PAUSE = enum.auto()
 
 
 class Scheduler:
@@ -508,6 +509,8 @@ class Scheduler:
         self.next_dt: Union['datetime.datetime', None] = None
         self.next_jobs: List['Job'] = []
         self.status_update_callback = lambda job_name, sched_status, retry: []
+        self.pause_callback = lambda is_paused: []
+        self.paused = False
 
     def find_job_by_name(self, job_name: str) -> Union[None, 'Job']:
         list_of_jobs = [job.name for job in self.jobs]
@@ -581,12 +584,26 @@ class Scheduler:
         self.timer_event.set()
         self.main_thread.join()
 
+    def pause(self) -> NoReturn:
+        if not self.paused:
+            self.paused = True
+            self.__pause_wakeup()
+
+    def unpause(self) -> NoReturn:
+        if self.paused:
+            self.__pause_wakeup()
+            self.paused = False
+
     def __timer_wakeup(self) -> NoReturn:
         self.timer_reason = WakeupReason.TIMER
         self.timer_event.set()
 
     def __update_wakeup(self) -> NoReturn:
         self.timer_reason = WakeupReason.UPDATE
+        self.timer_event.set()
+
+    def __pause_wakeup(self) -> NoReturn:
+        self.timer_reason = WakeupReason.PAUSE
         self.timer_event.set()
 
     def scheduler_thread(self) -> NoReturn:
@@ -606,7 +623,7 @@ class Scheduler:
 
                 Logger.debug(
                     '[Scheduler] Determined next action at {}, waiting for {} s.'.format(self.next_dt, sleep_time))
-                self.timer_reason = WakeupReason.TIMER
+                self.timer_event.clear()
                 self.timer.start()
             else:
                 Logger.debug('[Scheduler] All jobs currently running, waiting for one to finish')
@@ -623,6 +640,25 @@ class Scheduler:
                 self.timer_event.clear()
                 if self.timer:
                     self.timer.cancel()
+                while self.next_jobs:
+                    job = self.next_jobs.pop()
+                    self.queue.put(job, self.next_dt)
+                    self.status_update_callback(job.name, 'wait', job.retry_count)
+                continue
+            elif self.timer_reason == WakeupReason.PAUSE:
+                Logger.debug('[Scheduler] Wakeup due to pause trigger. Clearing timer and going to pause...')
+                self.timer_event.clear()
+                if self.timer:
+                    self.timer.cancel()
+
+                self.pause_callback(True)
+
+                self.timer_event.wait()
+                Logger.debug('[Scheduler] Wakeup from pause, re-evaluating todos.')
+                self.timer_event.clear()
+
+                self.pause_callback(False)
+
                 while self.next_jobs:
                     job = self.next_jobs.pop()
                     self.queue.put(job, self.next_dt)

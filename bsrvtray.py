@@ -19,8 +19,9 @@ DATA_PACKAGE_NAME = 'bsrv'
 class Status:
     OK = 0
     RUNNING = 1
-    WARNING = 2
-    ERROR = 3
+    PAUSE = 2
+    WARNING = 3
+    ERROR = 4
     NO_CONNECTION = 99
 
 
@@ -52,6 +53,10 @@ class MainApp:
             QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_noconnection.png")),
             QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon.png"))
         ]
+        self.icon_pause = [
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_pause.png")),
+            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon.png"))
+        ]
         self.icon_running = [
             QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running0.png")),
             QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running1.png")),
@@ -68,6 +73,7 @@ class MainApp:
 
         # Load icons for menu
         self.micon_exit = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_exit.png"))
+        self.micon_pause = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_pause.png"))
         self.micon_info = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_info.png"))
         self.micon_run = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_run.png"))
         self.micon_mount = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_mount.png"))
@@ -87,6 +93,12 @@ class MainApp:
         self.exit_action.triggered.connect(self.__click_exit)
         self.exit_action.setIcon(self.micon_exit)
         self.menu.addAction(self.exit_action)
+        self.menu.addSeparator()
+
+        self.pause_action = QAction("Toggle Pause", self.qapp)
+        self.pause_action.triggered.connect(self.__click_pause)
+        self.pause_action.setIcon(self.micon_pause)
+        self.menu.addAction(self.pause_action)
         self.menu.addSeparator()
 
         self.tray.setContextMenu(self.menu)
@@ -127,6 +139,11 @@ class MainApp:
             icon_status = max(sum_status, self.status)
             if icon_status == Status.NO_CONNECTION:
                 self.tray.setIcon(self.icon_noconnection[(self.animation_counter // 2) % len(self.icon_noconnection)])
+            if icon_status == Status.PAUSE:
+                ctr = (self.animation_counter // 2) % 4
+                if ctr > 1:
+                    ctr = 0
+                self.tray.setIcon(self.icon_pause[ctr])
             elif icon_status == Status.OK:
                 self.tray.setIcon(self.icon_ok)
             elif icon_status == Status.WARNING:
@@ -228,6 +245,16 @@ class MainApp:
         self.log.info('Click list for job {}. Not implemented!'.format(job_name))
         pass
 
+    def __click_pause(self):
+        self.log.info('Click pause toggle button.')
+        try:
+            if self.proxy:
+                self.proxy.SetPause(not self.proxy.GetPause())
+        except DBusError:
+            self.proxy = None
+            self.status = Status.NO_CONNECTION
+            self.log.error('Could not toggle pause.')
+
     def heartbeat(self):
         self.log.info('[Heartbeat] Triggered')
         if self.proxy is None:
@@ -247,8 +274,14 @@ class MainApp:
 
                 if self.__status_update not in self.proxy.StatusUpdateNotifier._callbacks:
                     self.proxy.StatusUpdateNotifier.connect(self.__status_update)
+                if self.__pause not in self.proxy.PauseNotifier._callbacks:
+                    self.proxy.PauseNotifier.connect(self.__pause)
 
-                self.status = Status.OK
+                if self.proxy.GetPause():
+                    self.status = Status.PAUSE
+                else:
+                    self.status = Status.OK
+
             except DBusError:
                 self.proxy = None
                 self.status = Status.NO_CONNECTION
@@ -288,6 +321,12 @@ class MainApp:
                 return
             else:
                 self.__store_status(job_name, sched, retry)
+
+    def __pause(self, is_paused: bool):
+        if is_paused:
+            self.status = Status.PAUSE
+        else:
+            self.status = Status.OK
 
     def __store_status(self, job_name: str, sched: str, retry: int):
         if sched == 'running':

@@ -39,6 +39,19 @@ class DBusInterface(object):
     def StatusUpdateNotifier(self, job_name: Str, scheduler_status: Str, retry: Int):
         pass
 
+    @dbus_signal
+    def PauseNotifier(self, is_paused: Bool):
+        pass
+
+    def SetPause(self, is_paused: Bool):
+        if is_paused:
+            self.scheduler.pause()
+        else:
+            self.scheduler.unpause()
+
+    def GetPause(self) -> Bool:
+        return self.scheduler.paused
+
     def GetLoadedJobs(self) -> List[Str]:
         return [job.name for job in self.scheduler.jobs]
 
@@ -85,6 +98,7 @@ class MainLoop:
         self.interface = DBusInterface(scheduler=scheduler)
         self.scheduler = scheduler
         self.scheduler.status_update_callback = self.__status_update_handler
+        self.scheduler.pause_callback = self.__pause_handler
         self.bus = bus
         self.service_identifier = get_dbus_service_identifier(bus)
         self.loop = EventLoop()
@@ -104,6 +118,9 @@ class MainLoop:
 
     def __status_update_handler(self, job_name: str, scheduler_status: str, retry: int):
         self.interface.StatusUpdateNotifier(job_name, scheduler_status, retry)
+
+    def __pause_handler(self, is_paused: bool):
+        self.interface.PauseNotifier(is_paused)
 
     def stop(self):
         self.loop.quit()

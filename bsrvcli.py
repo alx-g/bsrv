@@ -22,6 +22,10 @@ def main():
                          help='Mount repository for given job using "borg mount"')
     m_group.add_argument('-u', '--umount', metavar='JOB_NAME', action='store', default=None, type=str,
                          help='UMount repository for given job using "borg umount"')
+    m_group.add_argument('--pause', action='store_true', default=False,
+                         help='Pause scheduler. No jobs will be run until scheduler is unpaused.')
+    m_group.add_argument('--unpause', action='store_true', default=False,
+                         help='Unpause scheduler. (see --pause for info)')
     m_group.add_argument('--shutdown', action='store_true', default=False, help='Shutdown daemon')
 
     parser.add_argument('--session-bus', action='store_true', default=False,
@@ -107,6 +111,10 @@ def main():
                 sys.exit(1)
             except DBusError:
                 sys.exit(0)
+        elif args.pause:
+            proxy.SetPause(True)
+        elif args.unpause:
+            proxy.SetPause(False)
 
     except DBusError as e:
         print('Could not connect to daemon, is it running?')
