@@ -1,17 +1,19 @@
 #!/usr/bin/env python
+import argparse
 import logging
 import os
 import sys
-import argparse
-from pkg_resources import resource_filename
 from typing import Dict
 
 from PyQt5.QtCore import QTimer, QMutex, QMutexLocker
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication
+from PyQt5.QtGui import QIcon, QFont, QFontDatabase
+from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction, QApplication, QWidget, QLabel, QTextEdit, QPushButton, \
+    QVBoxLayout, QDesktopWidget
 from dasbus.error import DBusError
+from pkg_resources import resource_filename
 
 from bsrv import SYSTEM_BUS, SESSION_BUS, get_dbus_service_identifier
+from bsrv.tools import parse_json, pretty_info
 
 DATA_PACKAGE_NAME = 'bsrv'
 
@@ -23,6 +25,33 @@ class Status:
     WARNING = 3
     ERROR = 4
     NO_CONNECTION = 99
+
+
+class TextWidget(QWidget):
+    def __init__(self, job_name, info):
+        super().__init__()
+        self.job = job_name
+        self.info = info
+
+        self.lbl_heading = QLabel('Infos on {}'.format(self.job), self)
+        self.lbl_heading.setFont(QFont(self.font().family(), 18))
+        self.txt_info = QTextEdit(self)
+        self.txt_info.setText(info)
+        self.txt_info.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        self.txt_info.setReadOnly(True)
+        self.btn_ok = QPushButton('OK', self)
+        self.btn_ok.clicked.connect(self.close)
+        self.vbox = QVBoxLayout()
+        self.vbox.addWidget(self.lbl_heading)
+        self.vbox.addWidget(self.txt_info)
+        self.vbox.addWidget(self.btn_ok)
+        self.setLayout(self.vbox)
+        self.setGeometry(0, 0, 900, 700)
+        qtRectangle = self.frameGeometry()
+        centerPoint = QDesktopWidget().availableGeometry().center()
+        qtRectangle.moveCenter(centerPoint)
+        self.move(qtRectangle.topLeft())
+        self.show()
 
 
 class MainApp:
@@ -170,21 +199,21 @@ class MainApp:
 
         job_mount_action = QAction("Mount", parent=job_menu)
         job_umount_action = QAction("UMount", parent=job_menu)
-        job_list_action = QAction("List", parent=job_menu)
+        job_info_action = QAction("Info", parent=job_menu)
         job_run_action = QAction("Run Now", parent=job_menu)
 
         job_mount_action.setIcon(self.micon_mount)
         job_umount_action.setIcon(self.micon_umount)
-        job_list_action.setIcon(self.micon_info)
+        job_info_action.setIcon(self.micon_info)
         job_run_action.setIcon(self.micon_run)
 
         job_mount_action.triggered.connect(lambda: self.__click_mount(job_name))
         job_umount_action.triggered.connect(lambda: self.__click_umount(job_name))
-        job_list_action.triggered.connect(lambda: self.__click_list(job_name))
+        job_info_action.triggered.connect(lambda: self.__click_info(job_name))
         job_run_action.triggered.connect(lambda: self.__click_run(job_name))
 
         job_menu.addAction(job_run_action)
-        job_menu.addAction(job_list_action)
+        job_menu.addAction(job_info_action)
         job_menu.addAction(job_mount_action)
         job_menu.addAction(job_umount_action)
 
@@ -194,7 +223,7 @@ class MainApp:
         self.job_actions[job_name] = {
             'mount': job_mount_action,
             'umount': job_umount_action,
-            'list': job_list_action,
+            'info': job_info_action,
             'run': job_run_action,
             'menu': job_menu_action
         }
@@ -204,7 +233,7 @@ class MainApp:
         self.log.info('Delete job {}'.format(job_name))
         self.job_submenu[job_name].removeAction(self.job_actions[job_name]['mount'])
         self.job_submenu[job_name].removeAction(self.job_actions[job_name]['umount'])
-        self.job_submenu[job_name].removeAction(self.job_actions[job_name]['list'])
+        self.job_submenu[job_name].removeAction(self.job_actions[job_name]['info'])
         self.job_submenu[job_name].removeAction(self.job_actions[job_name]['run'])
         self.menu.removeAction(self.job_actions[job_name]['menu'])
         del self.job_actions[job_name]
@@ -241,9 +270,18 @@ class MainApp:
             self.status = Status.NO_CONNECTION
             self.log.error('Could not run job {}'.format(job_name))
 
-    def __click_list(self, job_name: str):
-        self.log.info('Click list for job {}. Not implemented!'.format(job_name))
-        pass
+    def __click_info(self, job_name: str):
+        self.log.info('Click info for job {}.'.format(job_name))
+        try:
+            if not self.proxy.RequestJobInfo(job_name):
+                self.log.error('Could not get info for job {}'.format(job_name))
+        except DBusError:
+            self.proxy = None
+            self.status = Status.NO_CONNECTION
+            self.log.error('Could not get info for job {}'.format(job_name))
+
+    def __callback_info(self, job_name: str, info: str):
+        self.info_widget = TextWidget(job_name=job_name, info=pretty_info(parse_json(info)))
 
     def __click_pause(self):
         self.log.info('Click pause toggle button.')
@@ -276,6 +314,8 @@ class MainApp:
                     self.proxy.StatusUpdateNotifier.connect(self.__status_update)
                 if self.__pause not in self.proxy.PauseNotifier._callbacks:
                     self.proxy.PauseNotifier.connect(self.__pause)
+                if self.__callback_info not in self.proxy.JobInfoNotifier._callbacks:
+                    self.proxy.JobInfoNotifier.connect(self.__callback_info)
 
                 if self.proxy.GetPause():
                     self.status = Status.PAUSE

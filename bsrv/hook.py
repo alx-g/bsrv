@@ -1,13 +1,13 @@
+import os
 import shlex
 import subprocess
 import threading
-import os
 from typing import Any, Union, NoReturn, List, TYPE_CHECKING
 
 from .logger import Logger
 
 if TYPE_CHECKING:
-    from .job import Job
+    pass
 
 
 class Hook:
@@ -50,8 +50,8 @@ class Hook:
                         Logger.info('[HOOK] ' + line)
             else:
                 Logger.error('Hook "{}" for "{}" failed with code {}: {}'.format(self.name, self.parent.name,
-                                                                                     self.task.returncode,
-                                                                                     str(self.command)))
+                                                                                 self.task.returncode,
+                                                                                 str(self.command)))
                 if stdout_ or stderr_:
                     for line in (stdout_ + stderr_).splitlines(keepends=False):
                         Logger.error('[HOOK] ' + line)

@@ -151,7 +151,7 @@ class Job:
             hook_run_failed: Hook,
             hook_run_successful: Hook,
             hook_give_up: Hook,
-            stat_maxage: Union[datetime.timedelta, None]=None,
+            stat_maxage: Union[datetime.timedelta, None] = None,
             borg_archive_name_template="%Y-%m-%d_%H-%M-%S",
             borg_rsh='ssh'
     ):
@@ -331,6 +331,45 @@ class Job:
                     hook_lines += line + '\\n'
             self.hook_list_failed.trigger(env={'BSRV_JOB': self.name, 'BSRV_ERROR': hook_lines})
             return None
+
+    def get_info(self):
+        archives = self.list_archives()
+
+        env = os.environ.copy()
+        env['BORG_REPO'] = self.borg_repo
+        env['BORG_RSH'] = self.borg_rsh
+        env['BORG_PASSPHRASE'] = self.borg_passphrase
+        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
+
+        params = ['borg', 'info', '--json']
+
+        tokens = [shlex.quote(token) for token in params]
+        Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
+
+        p = subprocess.Popen(
+            params,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env
+        )
+        stdout, stderr = p.communicate()
+        stdout_ = stdout.decode()
+        stderr_ = stderr.decode()
+        if p.returncode == 0:
+            try:
+                borg_info = parse_json(stdout_)
+            except Exception:
+                Logger.error('borg returned non-parsable json')
+                borg_info = {}
+        else:
+            Logger.error('borg returned with non-zero exitcode')
+            if stdout_ or stderr_:
+                for line in (stdout_ + stderr_).splitlines(keepends=False):
+                    Logger.error(line)
+            borg_info = {}
+
+        borg_info['archives'] = archives
+        return borg_info
 
     def mount(self):
         env = os.environ.copy()

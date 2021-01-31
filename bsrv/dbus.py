@@ -1,3 +1,4 @@
+import concurrent.futures
 import datetime
 import signal
 from typing import TYPE_CHECKING
@@ -8,6 +9,7 @@ from dasbus.loop import EventLoop
 from dasbus.server.interface import dbus_interface, dbus_signal
 from dasbus.typing import Str, List, Dict, Bool, Int
 
+from bsrv.tools import gen_json
 from .logger import Logger
 
 if TYPE_CHECKING:
@@ -20,6 +22,8 @@ TMP_SERVICE_IDENTIFIER = DBusServiceIdentifier(
     namespace=("de", "alxg", "bsrvd"),
     message_bus=None
 )
+
+pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
 
 def get_dbus_service_identifier(message_bus):
@@ -43,6 +47,10 @@ class DBusInterface(object):
     def PauseNotifier(self, is_paused: Bool):
         pass
 
+    @dbus_signal
+    def JobInfoNotifier(self, job_name: str, info: str):
+        pass
+
     def SetPause(self, is_paused: Bool):
         if is_paused:
             self.scheduler.pause()
@@ -61,6 +69,29 @@ class DBusInterface(object):
             return {}
         else:
             return self.scheduler.get_job_status(job)
+
+    def RequestJobInfo(self, job_name: Str) -> Bool:
+        job = self.scheduler.find_job_by_name(job_name)
+        if not job:
+            return False
+        future = pool.submit(lambda: gen_json(self.job_info(job_name)))
+        future.add_done_callback(lambda fut: self.JobInfoNotifier(job_name, fut.result()))
+        return True
+
+    def GetJobInfo(self, job_name: Str) -> str:
+        job = self.scheduler.find_job_by_name(job_name)
+        if not job:
+            return ''
+        return gen_json(self.job_info(job_name))
+
+    def job_info(self, job_name: str) -> dict:
+        job = self.scheduler.find_job_by_name(job_name)
+        if not job:
+            return {}
+        scheduler_info = self.scheduler.get_job_status(job)
+        job_info = job.get_info()
+        job_info['scheduler'] = scheduler_info
+        return job_info
 
     def RunJob(self, job_name: Str) -> Bool:
         job = self.scheduler.find_job_by_name(job_name)
