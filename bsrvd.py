@@ -43,8 +43,10 @@ def main():
 
         if args.session_bus:
             loop = MainLoop(scheduler=scheduler, bus=SESSION_BUS)
+            Config.set_global('root', False)
         else:
             loop = MainLoop(scheduler=scheduler, bus=SYSTEM_BUS)
+            Config.set_global('root', True)
 
     except SystemExit as e:
         if e.code == 0:

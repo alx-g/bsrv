@@ -17,6 +17,7 @@ class ConfigMeta(type):
 
 class Config(metaclass=ConfigMeta):
     config_parser = None
+    globals = {}
 
     @staticmethod
     def initialize(path):
@@ -53,3 +54,14 @@ class Config(metaclass=ConfigMeta):
                 Logger.critical('Cannot write to "{}"'.format(path))
         if failed:
             sys.exit(33)
+
+    @staticmethod
+    def set_global(key, val):
+        Config.globals[key] = val
+
+    @staticmethod
+    def get_global(key):
+        try:
+            return Config.globals[key]
+        except:
+            return None

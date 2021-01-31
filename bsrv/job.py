@@ -378,7 +378,10 @@ class Job:
         env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
 
         pathlib.Path(self.mount_dir).mkdir(exist_ok=True)
-        params = ['borg', 'mount', '-o', 'allow_other', self.borg_repo, self.mount_dir]
+        if Config.get_global('root'):
+            params = ['borg', 'mount', '-o', 'allow_other', self.borg_repo, self.mount_dir]
+        else:
+            params = ['borg', 'mount', self.borg_repo, self.mount_dir]
 
         tokens = [shlex.quote(token) for token in params]
         Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
