@@ -570,7 +570,7 @@ class Scheduler:
         if job in self.jobs_running:
             job_status['schedule_status'] = 'running'
             job_status['schedule_dt'] = 'now'
-        if job in self.next_jobs:
+        elif job in self.next_jobs:
             job_status['schedule_status'] = 'next'
             job_status['schedule_dt'] = self.next_dt.isoformat()
         else:
