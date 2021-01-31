@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="bsrv",
-    version="0.0.1a4",
+    version="0.0.1a5",
     author="Alexander Grathwohl",
     author_email="alex.grathwohl@gmail.com",
     description="Linux daemon to manage periodic borg backups",
@@ -48,5 +48,6 @@ setuptools.setup(
     package_data={'bsrv': ['icons/*']},
     data_files=[('share/dbus-1/system-services', ['configs/dbus/de.alxg.bsrvd.service']),
                 ('share/dbus-1/system.d', ['configs/dbus/de.alxg.bsrvd.conf']),
-                ('lib/systemd/system', ['configs/systemd/bsrvd.service'])]
+                ('lib/systemd/system', ['configs/systemd/bsrvd.service']),
+                ('lib/systemd/system', ['configs/systemd/bsrvstatd.service'])]
 )

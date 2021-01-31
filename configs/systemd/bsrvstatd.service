@@ -1,0 +1,10 @@
+[Unit]
+Description=Borg Backup Service Status Daemon
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bsrvstatd
+
+[Install]
+WantedBy=multi-user.target
+

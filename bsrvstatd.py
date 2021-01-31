@@ -117,7 +117,7 @@ class BorgStatService:
 def main():
     # Argument parsing
     parser = argparse.ArgumentParser(description='Borg Service daemon.')
-    parser.add_argument('-c', metavar='CONFIGFILE', action='store', default='/etc/bsrvstatd.conf', type=str,
+    parser.add_argument('-c', metavar='CONFIGFILE', action='store', default='/etc/bsrvd.conf', type=str,
                         help='Path to configuration file.')
 
     args = parser.parse_args()
