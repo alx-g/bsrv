@@ -131,7 +131,7 @@ of specified data to a specified repository using borg.
 * `borg_passphrase`: Passphrase for this borg repository
 * `borg_rsh`: ssh command used to open ssh connection if necessary to connect to repo. Default is `ssh`.
     This is useful to automate the login on a backup server via a certificate. Then, a private key file can be specified
-    to be used for ssh authentication using `ssh -i /path/th/id_rsa`.
+    to be used for ssh authentication using `ssh -i /path/to/id_rsa`.
 * `borg_create_args`: Arguments to pass to the borg create command specifying files and folder to backup and/or exclude.
     See `man borg` for more info.
 * `borg_prune_args`: `bsrvd` automatically runs a `borg prune` after each successful backup. This option specifies the
@@ -142,9 +142,9 @@ of specified data to a specified repository using borg.
 * `retry_max`: Maximum number of retries before giving up and settling for next scheduled backup time. `0` deactivates
     retrying. Default is `3`.
 * `stat_maxage`: When `bsrvstatd` checks this repository, it is satisfied if the last successful backup is not older
-    than the given time period. Time definition is done using system also used for `@every` in relative schedule syntax.
-    It is best explained in the [Schedule syntax](#schedule-syntax) section. If this value is not set, `bsrvstatd` will
-    not do checks for this job.
+    than the given `[TIMEPERIOD]`. This definition is done using `[TIMEPERIOD]` system also used for `@every` in
+    relative schedule syntax. It is best explained in the [Schedule syntax](#schedule-syntax) section. If this value is
+    not set, `bsrvstatd` will not do checks for this job.
 
 ## Schedule syntax
 
