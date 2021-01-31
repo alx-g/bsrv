@@ -107,6 +107,12 @@ listed:
 | `hook_run_successful`    | Running a backup was successful, which means `borg create` and `borg prune` commands succeeded
 | `hook_give_up`           | Running a backup failed multiple times until the maximum number of retries was reached and `bsrvd` gave up 
 
+All hook commands listed above will be launched in an environment with the following environment variables defined:
+
+* `BSRV_HOOK_NAME` contains the hooks name (as listed)
+* `BSRV_JOB` contains the job name responsible for triggering, e.g. `:test`
+* If borg fails with a nonzero exitcode, `BSRV_ERROR` contains borg's stdout and stderr
+
 **[stat]**
 
 This section contains the global configuration for `bsrvstatd`.
@@ -120,6 +126,14 @@ This section contains the global configuration for `bsrvstatd`.
     be reached and they meet their individual conditions.
 * `hook_failed`: Hook command to run when any repositories associated with jobs with `stat_maxage` conditions could not
     be reached or they do not meet their individual conditions.
+
+All stat hook commands listed above will be launched in an environment with the following environment variables defined:
+
+* `BSRV_HOOK_NAME` contains the hooks name (as listed)
+* `BSRV_INFO_TXT` contains information about all jobs, where status checks have been performed in a human-readable
+    format
+* `BSRV_INFO_JSON` contains information about all jobs, where status checks have been performed in JSON format for easy
+    postprocessing
 
 **Job sections [:NAME_HERE]**
 
