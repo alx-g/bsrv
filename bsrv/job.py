@@ -14,6 +14,7 @@ from typing import *
 
 from .cache import Cache
 from .config import Config
+from .demote import DemotionSubprocess
 from .hook import Hook
 from .logger import Logger
 from .tools import parse_json
@@ -33,28 +34,6 @@ class Job:
     @staticmethod
     def from_bsrvstatd_config(cfg_section: str):
         try:
-            hook_timeout = Config.getint('borg', 'hook_timeout', fallback=20)
-
-            hook_list_failed = Hook(
-                'hook_list_failed',
-                Config.get(cfg_section, 'hook_list_failed',
-                           fallback=Config.get('borg', 'hook_list_failed', fallback='')),
-                timeout=hook_timeout
-            )
-            hook_list_successful = Hook(
-                'hook_list_successful',
-                Config.get(cfg_section, 'hook_list_successful',
-                           fallback=Config.get('borg', 'hook_list_successful', fallback='')),
-                timeout=hook_timeout
-            )
-            hook_mount_failed = Hook('hook_mount_failed', '', timeout=hook_timeout)
-            hook_mount_successful = Hook('hook_mount_successful', '', timeout=hook_timeout)
-            hook_umount_failed = Hook('hook_umount_failed', '', timeout=hook_timeout)
-            hook_umount_successful = Hook('hook_umount_successful', '', timeout=hook_timeout)
-            hook_run_failed = Hook('hook_run_failed', '', timeout=hook_timeout)
-            hook_run_successful = Hook('hook_run_successful', '', timeout=hook_timeout)
-            hook_give_up = Hook('hook_give_up', '', timeout=hook_timeout)
-
             every_expr = re.compile(r'^\s*((?P<weeks>\d+)\s*w(eeks?)?)?'
                                     r'\s*((?P<days>\d+)\s*d(ays?)?)?'
                                     r'\s*((?P<hours>\d+)\s*h(ours?)?)?'
@@ -74,19 +53,20 @@ class Job:
                 borg_passphrase=Config.get(cfg_section, 'borg_passphrase'),
                 borg_prune_args=None,
                 borg_create_args=None,
+                borg_run_as=None,
                 schedule=None,
                 retry_delay=None,
                 retry_max=None,
                 stat_maxage=stat_maxage,
-                hook_list_failed=hook_list_failed,
-                hook_list_successful=hook_list_successful,
-                hook_mount_failed=hook_mount_failed,
-                hook_mount_successful=hook_mount_successful,
-                hook_umount_failed=hook_umount_failed,
-                hook_umount_successful=hook_umount_successful,
-                hook_run_failed=hook_run_failed,
-                hook_run_successful=hook_run_successful,
-                hook_give_up=hook_give_up
+                hook_list_failed=Hook.from_config(cfg_section, 'hook_list_failed'),
+                hook_list_successful=Hook.from_config(cfg_section, 'hook_list_successful'),
+                hook_mount_failed=Hook.from_config(cfg_section, 'hook_mount_failed'),
+                hook_mount_successful=Hook.from_config(cfg_section, 'hook_mount_successful'),
+                hook_umount_failed=Hook.from_config(cfg_section, 'hook_umount_failed'),
+                hook_umount_successful=Hook.from_config(cfg_section, 'hook_umount_successful'),
+                hook_run_failed=Hook.from_config(cfg_section, 'hook_run_failed'),
+                hook_run_successful=Hook.from_config(cfg_section, 'hook_run_successful'),
+                hook_give_up=Hook.from_config(cfg_section, 'hook_give_up')
             )
         except configparser.NoOptionError as e:
             Logger.error('Error in config file: Missing or invalid key for job "{}": {}'.format(cfg_section, e.message))
@@ -95,68 +75,6 @@ class Job:
     @staticmethod
     def from_bsrvd_config(cfg_section: str):
         try:
-            hook_timeout = Config.getint('borg', 'hook_timeout', fallback=20)
-
-            hook_list_failed = Hook(
-                'hook_list_failed',
-                Config.get(cfg_section, 'hook_list_failed',
-                           fallback=Config.get('borg', 'hook_list_failed', fallback='')),
-                timeout=hook_timeout
-            )
-            hook_list_successful = Hook(
-                'hook_list_successful',
-                Config.get(cfg_section, 'hook_list_successful',
-                           fallback=Config.get('borg', 'hook_list_successful', fallback='')),
-                timeout=hook_timeout
-            )
-            hook_mount_failed = Hook(
-                'hook_mount_failed',
-                Config.get(cfg_section, 'hook_mount_failed',
-                           fallback=Config.get('borg', 'hook_mount_failed', fallback='')),
-                timeout=hook_timeout
-            )
-            hook_mount_successful = Hook(
-                'hook_mount_successful',
-                Config.get(cfg_section, 'hook_mount_successful',
-                           fallback=Config.get('borg', 'hook_mount_successful', fallback='')),
-                timeout=hook_timeout
-            )
-            hook_umount_failed = Hook(
-                'hook_umount_failed',
-                Config.get(cfg_section, 'hook_umount_failed',
-                           fallback=Config.get('borg', 'hook_umount_failed', fallback='')),
-                timeout=hook_timeout
-            )
-            hook_umount_successful = Hook(
-                'hook_umount_successful',
-                Config.get(cfg_section, 'hook_umount_successful',
-                           fallback=Config.get('borg', 'hook_umount_successful', fallback='')),
-                timeout=hook_timeout
-            )
-            hook_run_failed = Hook(
-                'hook_run_failed',
-                Config.get(cfg_section, 'hook_run_failed',
-                           fallback=Config.get('borg', 'hook_run_failed', fallback='')),
-                timeout=hook_timeout
-            )
-            hook_run_successful = Hook(
-                'hook_run_successful',
-                Config.get(cfg_section, 'hook_run_successful',
-                           fallback=Config.get('borg', 'hook_run_successful', fallback='')),
-                timeout=hook_timeout
-            )
-            hook_give_up = Hook(
-                'hook_give_up',
-                Config.get(cfg_section, 'hook_give_up',
-                           fallback=Config.get('borg', 'hook_give_up', fallback='')),
-                timeout=hook_timeout
-            )
-
-            every_expr = re.compile(r'^\s*((?P<weeks>\d+)\s*w(eeks?)?)?'
-                                    r'\s*((?P<days>\d+)\s*d(ays?)?)?'
-                                    r'\s*((?P<hours>\d+)\s*h(ours?)?)?'
-                                    r'\s*((?P<minutes>\d+)\s*m(in(utes?)?)?)?\s*$', re.IGNORECASE)
-
             return Job(
                 name=cfg_section,
                 borg_repo=Config.get(cfg_section, 'borg_repo'),
@@ -166,19 +84,20 @@ class Job:
                 borg_passphrase=Config.get(cfg_section, 'borg_passphrase'),
                 borg_prune_args=shlex.split(Config.get(cfg_section, 'borg_prune_args')),
                 borg_create_args=shlex.split(Config.get(cfg_section, 'borg_create_args')),
+                borg_run_as=Config.get(cfg_section, 'borg_run_as', fallback=None),
                 schedule=Schedule(Config.get(cfg_section, 'schedule')),
                 retry_delay=Config.getint(cfg_section, 'retry_delay', fallback=60),
                 retry_max=Config.getint(cfg_section, 'retry_max', fallback=3),
                 stat_maxage=None,
-                hook_list_failed=hook_list_failed,
-                hook_list_successful=hook_list_successful,
-                hook_mount_failed=hook_mount_failed,
-                hook_mount_successful=hook_mount_successful,
-                hook_umount_failed=hook_umount_failed,
-                hook_umount_successful=hook_umount_successful,
-                hook_run_failed=hook_run_failed,
-                hook_run_successful=hook_run_successful,
-                hook_give_up=hook_give_up
+                hook_list_failed=Hook.from_config(cfg_section, 'hook_list_failed'),
+                hook_list_successful=Hook.from_config(cfg_section, 'hook_list_successful'),
+                hook_mount_failed=Hook.from_config(cfg_section, 'hook_mount_failed'),
+                hook_mount_successful=Hook.from_config(cfg_section, 'hook_mount_successful'),
+                hook_umount_failed=Hook.from_config(cfg_section, 'hook_umount_failed'),
+                hook_umount_successful=Hook.from_config(cfg_section, 'hook_umount_successful'),
+                hook_run_failed=Hook.from_config(cfg_section, 'hook_run_failed'),
+                hook_run_successful=Hook.from_config(cfg_section, 'hook_run_successful'),
+                hook_give_up=Hook.from_config(cfg_section, 'hook_give_up')
             )
         except ScheduleParseError:
             Logger.error('Error in config file: Invalid schedule specification for job "{}"'.format(cfg_section))
@@ -195,6 +114,7 @@ class Job:
             borg_passphrase,
             borg_create_args,
             borg_prune_args,
+            borg_run_as,
             schedule,
             retry_delay,
             retry_max,
@@ -218,6 +138,8 @@ class Job:
         self.borg_archive_name_template: str = borg_archive_name_template
         self.borg_prune_args: str = borg_prune_args
         self.borg_create_args: str = borg_create_args
+        self.demotion = DemotionSubprocess(borg_run_as, parent_descr='Job{}'.format(self.name))
+
         self.schedule: Schedule = schedule
         self.retry_delay: int = retry_delay
         self.retry_max: int = retry_max
@@ -232,23 +154,23 @@ class Job:
             self.runnable = True
 
         self.hook_list_failed: 'Hook' = hook_list_failed
-        self.hook_list_failed.set_parent(self)
+        self.hook_list_failed.set_parent_description(self.name)
         self.hook_list_successful: 'Hook' = hook_list_successful
-        self.hook_list_successful.set_parent(self)
+        self.hook_list_successful.set_parent_description(self.name)
         self.hook_mount_failed: 'Hook' = hook_mount_failed
-        self.hook_mount_failed.set_parent(self)
+        self.hook_mount_failed.set_parent_description(self.name)
         self.hook_mount_successful: 'Hook' = hook_mount_successful
-        self.hook_mount_successful.set_parent(self)
+        self.hook_mount_successful.set_parent_description(self.name)
         self.hook_umount_failed: 'Hook' = hook_umount_failed
-        self.hook_umount_failed.set_parent(self)
+        self.hook_umount_failed.set_parent_description(self.name)
         self.hook_umount_successful: 'Hook' = hook_umount_successful
-        self.hook_umount_successful.set_parent(self)
+        self.hook_umount_successful.set_parent_description(self.name)
         self.hook_run_failed: 'Hook' = hook_run_failed
-        self.hook_run_failed.set_parent(self)
+        self.hook_run_failed.set_parent_description(self.name)
         self.hook_run_successful: 'Hook' = hook_run_successful
-        self.hook_run_successful.set_parent(self)
+        self.hook_run_successful.set_parent_description(self.name)
         self.hook_give_up: 'Hook' = hook_give_up
-        self.hook_give_up.set_parent(self)
+        self.hook_give_up.set_parent_description(self.name)
 
     def __eq__(self, other):
         return other.name == self.name
@@ -271,7 +193,7 @@ class Job:
         tokens = [shlex.quote(token) for token in params]
         Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
 
-        p = subprocess.Popen(
+        p = self.demotion.Popen(
             params,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -301,7 +223,7 @@ class Job:
         tokens = [shlex.quote(token) for token in params]
         Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
 
-        p = subprocess.Popen(
+        p = self.demotion.Popen(
             params,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -366,7 +288,7 @@ class Job:
         tokens = [shlex.quote(token) for token in params]
         Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
 
-        p = subprocess.Popen(
+        p = self.demotion.Popen(
             params,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -410,7 +332,7 @@ class Job:
         tokens = [shlex.quote(token) for token in params]
         Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
 
-        p = subprocess.Popen(
+        p = self.demotion.Popen(
             params,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -450,7 +372,7 @@ class Job:
         tokens = [shlex.quote(token) for token in params]
         Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
 
-        p = subprocess.Popen(
+        p = self.demotion.Popen(
             params,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -481,7 +403,7 @@ class Job:
         tokens = [shlex.quote(token) for token in params]
         Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
 
-        p = subprocess.Popen(
+        p = self.demotion.Popen(
             params,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

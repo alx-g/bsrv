@@ -80,7 +80,7 @@ This section contains configuration options related to logging and are used by b
 **[borg]**
 
 This section contains global settings for borg. Also, hooks that should apply to all defined jobs can be defined here.
-For more information on hooks, see dedicated section below.
+For more information on hooks, see dedicated sections [Job-Hooks](#job-hooks) and [Stat-Hooks](#stat-hooks) below.
 
 * `binary`: Specify an alternative path to the `borg` binary. If this value is not set, `borg` will be assumed to be in
   **PATH**.
@@ -88,30 +88,8 @@ For more information on hooks, see dedicated section below.
   `/var/cache/bsrvd`.
 * `mount_dir`: Base directory where to mount borg backup repositories using borg mount, default is `/tmp/bsrvd-mount`.
   The service needs to have write access to this folder.
-* `hook_timeout`: Time in seconds, before hook commands in `[borg]` section or in *job* sections are considered to have
-  failed. Default is 20 seconds.
-
-The following keys allow the definition of commands to be run when certain events occur. The commands specified here are
-used for all jobs. If you wish to specify them individually, you can use the same keys in a job section to overwrite
-them. In the following table, all hooks and their purpose are listed:
-
-| Hook                     | Situation triggering this hook           |
-|--------------------------|------------------------------------------|
-| `hook_list_failed`       | `borg list` command failed               |
-| `hook_list_successful`   | `borg list` command successful           |
-| `hook_mount_failed`      | `borg mount`command failed               |
-| `hook_mount_successful`  | `borg mount` command successful          |
-| `hook_umount_failed`     | `borg umount` command failed             |
-| `hook_umount_successful` | `borg umount` command successful         |
-| `hook_run_failed`        | Running a backup failed, which means `borg create` or `borg prune` command failed
-| `hook_run_successful`    | Running a backup was successful, which means `borg create` and `borg prune` commands succeeded
-| `hook_give_up`           | Running a backup failed multiple times until the maximum number of retries was reached and `bsrvd` gave up
-
-All hook commands listed above will be launched in an environment with the following environment variables defined:
-
-* `BSRV_HOOK_NAME` contains the hooks name (as listed)
-* `BSRV_JOB` contains the job name responsible for triggering, e.g. `:test`
-* If borg fails with a nonzero exitcode, `BSRV_ERROR` contains borg's stdout and stderr
+* `hook_timeout`: Global default for time in seconds, before hook commands are
+  considered to have failed. Default is 20 seconds.
 
 **[stat]**
 
@@ -120,25 +98,18 @@ This section contains the global configuration for `bsrvstatd`.
 * `schedule`: Schedule defining when check backup repositories. This is a global setting and results in all jobs being
   checked, if they define a `stat_maxage` key. The syntax of this value is best explained in the
   [Schedule syntax](#schedule-syntax) section. **TREF** is the previously scheduled stat event.
-* `hook_timeout`: Time in seconds, before hook commands in `[stat]` section are considered to have failed. Default is
-  `60` seconds.
 * `hook_satisfied`: Hook command to run when all repositories associated with jobs with `stat_maxage` conditions could
   be reached and they meet their individual conditions.
 * `hook_failed`: Hook command to run when any repositories associated with jobs with `stat_maxage` conditions could not
   be reached or they do not meet their individual conditions.
 
-All stat hook commands listed above will be launched in an environment with the following environment variables defined:
-
-* `BSRV_HOOK_NAME` contains the hooks name (as listed)
-* `BSRV_INFO_TXT` contains information about all jobs, where status checks have been performed in a human-readable
-  format
-* `BSRV_INFO_JSON` contains information about all jobs, where status checks have been performed in JSON format for easy
-  postprocessing
+For more information on hooks, see sections [Job-Hooks](#job-hooks) and [Stat-Hooks](#stat-hooks) below.
 
 **Job sections [:NAME_HERE]**
 
 Each job section name needs to be prefixed with a `:`. This section contains all information necessary to run a backup
-of specified data to a specified repository using borg.
+of specified data to a specified repository using borg. Also, hooks can be defined here. For more information on hooks,
+see dedicated sections [Job-Hooks](#job-hooks) and [Stat-Hooks](#stat-hooks) below.
 
 * `borg_repo`: Path to borg repository as it is supplied to the borg command. This may for example include *ssh://* if
   the repository is located on a remote server.
@@ -220,6 +191,60 @@ where `SPEC` is a comma separated list of integers or ranges indicated with a `-
   0       6           *           */2     0           -> Run when month-1 is divisible by 2, weekday is sunday and time is 6:00
   0       8-15        *           *       *           -> Run every day at 8:00,9:00,10:00,11:00,12:00,13:00,14:00, and 15:00
 ```
+
+## Job-Hooks
+
+The following keys allow the definition of commands to be run when certain events occur. 
+A hook has three options:
+
+* `HOOK_NAME`: Command to run when this hook is triggered
+* `HOOK_NAME_timeout`: Time in seconds, until this is considered to have failed
+* `HOOK_NAME_run_as`: If the service is run as root, specify a user to demote this hooks process to
+
+Hooks can be defined in the `[borg]` section, in this case they apply to all jobs.
+They can also be defined individually in a job section. The definition in a job section takes precedence.
+For the timeout, there is also a global default value in the `[borg]` section, `hook_timeout`.
+
+In the following table, all hooks and their purpose are listed:
+
+| HOOK_NAME                | Situation triggering this hook           |
+|--------------------------|------------------------------------------|
+| `hook_list_failed`       | `borg list` command failed               |
+| `hook_list_successful`   | `borg list` command successful           |
+| `hook_mount_failed`      | `borg mount`command failed               |
+| `hook_mount_successful`  | `borg mount` command successful          |
+| `hook_umount_failed`     | `borg umount` command failed             |
+| `hook_umount_successful` | `borg umount` command successful         |
+| `hook_run_failed`        | Running a backup failed, which means `borg create` or `borg prune` command failed
+| `hook_run_successful`    | Running a backup was successful, which means `borg create` and `borg prune` commands succeeded
+| `hook_give_up`           | Running a backup failed multiple times until the maximum number of retries was reached and `bsrvd` gave up
+
+All hook commands listed above will be launched in an environment with the following environment variables defined:
+
+* `BSRV_HOOK_NAME` contains the hooks name (as listed)
+* `BSRV_JOB` contains the job name responsible for triggering, e.g. `:test`
+* If borg fails with a nonzero exitcode, `BSRV_ERROR` contains borg's stdout and stderr
+
+## Stat-Hooks
+
+The hooks defined in the `[stat]` section are somewhat special. They are inherently global and can therefore not be changed for each job individually.
+They are also defined using the three options listed above, the default timeout is also set by `[borg]` -> `hook_timeout` and can be changed individually.
+
+These are all hooks used in the `[stat]` section:
+
+* `hook_satisfied`: Hook command to run when all repositories associated with jobs with `stat_maxage` conditions could
+  be reached and they meet their individual conditions.
+* `hook_failed`: Hook command to run when any repositories associated with jobs with `stat_maxage` conditions could not
+  be reached or they do not meet their individual conditions.
+
+All stat hook commands listed above will be launched in an environment with the following environment variables defined:
+
+* `BSRV_HOOK_NAME` contains the hooks name (as listed)
+* `BSRV_INFO_TXT` contains information about all jobs, where status checks have been performed in a human-readable
+  format
+* `BSRV_INFO_JSON` contains information about all jobs, where status checks have been performed in JSON format for easy
+  postprocessing
+
 
 ## Development environment setup
 

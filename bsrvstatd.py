@@ -21,14 +21,10 @@ class BorgStatService:
         self.timer_event = threading.Event()
         self.timer: Union['threading.Timer', None] = None
 
-        self.name = 'BorgStatService'
-
-        hook_timeout = Config.getint('stat', 'hook_timeout', fallback=60)
-        self.hook_satisfied = Hook('hook_satisfied', Config.get('stat', 'hook_satisfied', fallback=''),
-                                   timeout=hook_timeout)
-        self.hook_satisfied.set_parent(self)
-        self.hook_failed = Hook('hook_failed', Config.get('stat', 'hook_failed', fallback=''), timeout=hook_timeout)
-        self.hook_failed.set_parent(self)
+        self.hook_satisfied = Hook.from_config('stat', 'hook_satisfied')
+        self.hook_satisfied.set_parent_description('BorgStatService')
+        self.hook_failed = Hook.from_config('stat', 'hook_failed')
+        self.hook_failed.set_parent_description('BorgStatService')
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
