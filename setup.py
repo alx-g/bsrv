@@ -1,4 +1,38 @@
 import setuptools
+import os
+import sys
+from setuptools.command.install import install
+import atexit
+
+SERVICE_FILE_PREFIX = 'lib/systemd/system'
+
+
+def find_prefix():
+    for p in sys.path:
+        if os.path.isdir(p) and 'bsrv' in os.listdir(p):
+            return os.path.abspath(os.path.join(p, '../../../'))
+
+
+def _post_install():
+    prefix = find_prefix()
+
+    files = ['bsrvd.service', 'bsrvstatd.service']
+    paths = [os.path.join(prefix, SERVICE_FILE_PREFIX, f) for f in files]
+
+    for p in paths:
+        cnt = ''
+        with open(p, 'r') as f:
+            cnt = f.read()
+        cnt_new = cnt.replace('{{INSTALL_PREFIX}}', prefix)
+        with open(p, 'w') as f:
+            f.write(cnt_new)
+
+
+class NewInstall(install):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        atexit.register(_post_install)
+
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -48,6 +82,9 @@ setuptools.setup(
     package_data={'bsrv': ['icons/*']},
     data_files=[('share/dbus-1/system-services', ['configs/dbus/de.alxg.bsrvd.service']),
                 ('share/dbus-1/system.d', ['configs/dbus/de.alxg.bsrvd.conf']),
-                ('lib/systemd/system', ['configs/systemd/bsrvd.service']),
-                ('lib/systemd/system', ['configs/systemd/bsrvstatd.service'])]
+                (SERVICE_FILE_PREFIX, ['configs/systemd/bsrvd.service']),
+                (SERVICE_FILE_PREFIX, ['configs/systemd/bsrvstatd.service'])],
+    cmdclass={
+        'install': NewInstall
+    }
 )

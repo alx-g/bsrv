@@ -4,7 +4,7 @@ Description=Borg Backup Service Daemon
 [Service]
 Type=dbus
 BusName=de.alxg.bsrvd
-ExecStart=/usr/bin/bsrvd
+ExecStart={{INSTALL_PREFIX}}/bin/bsrvd
 
 [Install]
 WantedBy=multi-user.target
