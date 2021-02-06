@@ -15,8 +15,8 @@ but from a tray menu.
 
 **Status Service**
 
-`bsrvstatd` is a Python3 daemon that periodically checks the backup repositories for the latest backup archives.
-It may trigger external commands, e.g. to inform daily or only in case of failed backups.
+`bsrvstatd` is a Python3 daemon that periodically checks the backup repositories for the latest backup archives. It may
+trigger external commands, e.g. to inform daily or only in case of failed backups.
 
 ## Dependencies
 
@@ -45,33 +45,34 @@ Also, the service relies on `dbus` to provide the interface for `bsrvcli` and ot
 
 `bsrvd`, at least for now, is hosted on a custom repository: https://pip.alx-g.de
 To install it using pip directly, use the following command:
+
 ```
 pip install --extra-index-url https://pip.alx-g.de/ bsrv --no-binary bsrv
 ```
 
-After installation, configuration files are needed.
-See the following section, and the provided `bsrvd_example.conf` for a guide.
+After installation, configuration files are needed. See the following section, and the provided `bsrvd_example.conf` for
+a guide.
 
 ## Configuration
 
-The default path to the config file for `bsrvd` and `bsrvstatd` is `/etc/bsrvd.conf`.
-A different config file can be supplied with the `-c` argument.
+The default path to the config file for `bsrvd` and `bsrvstatd` is `/etc/bsrvd.conf`. A different config file can be
+supplied with the `-c` argument.
 
 **Overview**
 
-The configuration file is in **ini** format and should always contain the sections `[logging]` and `[borg]`.
-Global options related to `bsrvstatd` are supplied in a `[stat]` section.
-Additionally, the file contains *job* sections, defining backups to run or watch.
-A job section is defined by assigning it a name with a `:` prefix.
+The configuration file is in **ini** format and should always contain the sections `[logging]` and `[borg]`. Global
+options related to `bsrvstatd` are supplied in a `[stat]` section. Additionally, the file contains *job* sections,
+defining backups to run or watch. A job section is defined by assigning it a name with a `:` prefix.
 
 **[logging]**
 
 This section contains configuration options related to logging and are used by both `bsrvd`and `bsrvstatd`.
+
 * `target`: Logging target, select one or more, separate with a comma. Options are as follows:
     * `file`: Log to a rotating file log. Filename and number of logs specified by `path` and `max_logfiles`.
     * `stdout`: Log to stdout.
     * `journald`: Log to systemd's logging daemon. This option can only be used if `bsrvd` is launched via a systemd
-        service file.
+      service file.
 * `path`: Configure logging path, only used with `target: file`.
 * `max_logfiles`: Configure number of daily logs to retain, only used with `target: file`.
 * `log_level`: Set logging level, options are: `CRITICAL`, `ERROR`, `WARNING`, `INFO`, `DEBUG`.
@@ -82,18 +83,17 @@ This section contains global settings for borg. Also, hooks that should apply to
 For more information on hooks, see dedicated section below.
 
 * `binary`: Specify an alternative path to the `borg` binary. If this value is not set, `borg` will be assumed to be in
-    **PATH**.
+  **PATH**.
 * `base_dir`: Set BORG_BASE_DIR, where borg places its cache and security info (e.g. nonces), default is
-    `/var/cache/bsrvd`.
+  `/var/cache/bsrvd`.
 * `mount_dir`: Base directory where to mount borg backup repositories using borg mount, default is `/tmp/bsrvd-mount`.
-    The service needs to have write access to this folder.
+  The service needs to have write access to this folder.
 * `hook_timeout`: Time in seconds, before hook commands in `[borg]` section or in *job* sections are considered to have
-    failed. Default is 20 seconds.
+  failed. Default is 20 seconds.
 
-The following keys allow the definition of commands to be run when certain events occur.
-The commands specified here are used for all jobs. If you wish to specify them individually, you
-can use the same keys in a job section to overwrite them. In the following table, all hooks and their purpose are
-listed:
+The following keys allow the definition of commands to be run when certain events occur. The commands specified here are
+used for all jobs. If you wish to specify them individually, you can use the same keys in a job section to overwrite
+them. In the following table, all hooks and their purpose are listed:
 
 | Hook                     | Situation triggering this hook           |
 |--------------------------|------------------------------------------|
@@ -105,7 +105,7 @@ listed:
 | `hook_umount_successful` | `borg umount` command successful         |
 | `hook_run_failed`        | Running a backup failed, which means `borg create` or `borg prune` command failed
 | `hook_run_successful`    | Running a backup was successful, which means `borg create` and `borg prune` commands succeeded
-| `hook_give_up`           | Running a backup failed multiple times until the maximum number of retries was reached and `bsrvd` gave up 
+| `hook_give_up`           | Running a backup failed multiple times until the maximum number of retries was reached and `bsrvd` gave up
 
 All hook commands listed above will be launched in an environment with the following environment variables defined:
 
@@ -118,22 +118,22 @@ All hook commands listed above will be launched in an environment with the follo
 This section contains the global configuration for `bsrvstatd`.
 
 * `schedule`: Schedule defining when check backup repositories. This is a global setting and results in all jobs being
-    checked, if they define a `stat_maxage` key. The syntax of this value is best explained in the
-    [Schedule syntax](#schedule-syntax) section. **TREF** is the previously scheduled stat event.
+  checked, if they define a `stat_maxage` key. The syntax of this value is best explained in the
+  [Schedule syntax](#schedule-syntax) section. **TREF** is the previously scheduled stat event.
 * `hook_timeout`: Time in seconds, before hook commands in `[stat]` section are considered to have failed. Default is
-    `60` seconds.
+  `60` seconds.
 * `hook_satisfied`: Hook command to run when all repositories associated with jobs with `stat_maxage` conditions could
-    be reached and they meet their individual conditions.
+  be reached and they meet their individual conditions.
 * `hook_failed`: Hook command to run when any repositories associated with jobs with `stat_maxage` conditions could not
-    be reached or they do not meet their individual conditions.
+  be reached or they do not meet their individual conditions.
 
 All stat hook commands listed above will be launched in an environment with the following environment variables defined:
 
 * `BSRV_HOOK_NAME` contains the hooks name (as listed)
 * `BSRV_INFO_TXT` contains information about all jobs, where status checks have been performed in a human-readable
-    format
+  format
 * `BSRV_INFO_JSON` contains information about all jobs, where status checks have been performed in JSON format for easy
-    postprocessing
+  postprocessing
 
 **Job sections [:NAME_HERE]**
 
@@ -141,32 +141,31 @@ Each job section name needs to be prefixed with a `:`. This section contains all
 of specified data to a specified repository using borg.
 
 * `borg_repo`: Path to borg repository as it is supplied to the borg command. This may for example include *ssh://* if
-    the repository is located on a remote server.
+  the repository is located on a remote server.
 * `borg_passphrase`: Passphrase for this borg repository
-* `borg_rsh`: ssh command used to open ssh connection if necessary to connect to repo. Default is `ssh`.
-    This is useful to automate the login on a backup server via a certificate. Then, a private key file can be specified
-    to be used for ssh authentication using `ssh -i /path/to/id_rsa`.
+* `borg_rsh`: ssh command used to open ssh connection if necessary to connect to repo. Default is `ssh`. This is useful
+  to automate the login on a backup server via a certificate. Then, a private key file can be specified to be used for
+  ssh authentication using `ssh -i /path/to/id_rsa`.
 * `borg_create_args`: Arguments to pass to the borg create command specifying files and folder to backup and/or exclude.
-    See `man borg` for more info.
+  See `man borg` for more info.
 * `borg_prune_args`: `bsrvd` automatically runs a `borg prune` after each successful backup. This option specifies the
-    arguments to supply to this command.
+  arguments to supply to this command.
 * `schedule`: Schedule defining when to run this backup. The syntax of this value is best explained in the
-    [Schedule syntax](#schedule-syntax) section. **TREF** is the previously scheduled event for this job.
+  [Schedule syntax](#schedule-syntax) section. **TREF** is the previously scheduled event for this job.
 * `retry_delay`: Delay in seconds before retrying a failed backup job. Default is `60`.
 * `retry_max`: Maximum number of retries before giving up and settling for next scheduled backup time. `0` deactivates
-    retrying. Default is `3`.
+  retrying. Default is `3`.
 * `stat_maxage`: When `bsrvstatd` checks this repository, it is satisfied if the last successful backup is not older
-    than the given `[TIMEPERIOD]`. This definition is done using `[TIMEPERIOD]` system also used for `@every` in
-    relative schedule syntax. It is best explained in the [Schedule syntax](#schedule-syntax) section. If this value is
-    not set, `bsrvstatd` will not do checks for this job.
+  than the given `[TIMEPERIOD]`. This definition is done using `[TIMEPERIOD]` system also used for `@every` in relative
+  schedule syntax. It is best explained in the [Schedule syntax](#schedule-syntax) section. If this value is not
+  set, `bsrvstatd` will not do checks for this job.
 
 ## Schedule syntax
 
-The syntax somewhat loosely follows crontab notation.
-In general, there are two ways to specify a schedule:
+The syntax somewhat loosely follows crontab notation. In general, there are two ways to specify a schedule:
 
 **1. Relative scheduling**
-   
+
 This schedules the next event based on a reference time **TREF**, which is normally the point in time the last event
 occurred.
 
@@ -191,15 +190,16 @@ following units:
 | Example | Description |
 |---|---|
 | `@every  1minute`| Run as soon as **TREF** lies back more than 1 minute
-| `@every 1 week 1 day 1 hour 1 minute` | Run as soon as **TREF** lies back more than 1 week, 1 day, 1 hour, and 1 minute
+| `@every 1 week 1 day 1 hour 1 minute` | Run as soon as **
+TREF** lies back more than 1 week, 1 day, 1 hour, and 1 minute
 | `@every 1w1d1h1m` | Same thing
 | `@hourly` | Run as soon as **TREF** lies back more than 1 hour
 | `@every 2 hours` | Run as soon as **TREF** lies back more than 2 hours
 
 **2. Absolute scheduling**
 
-This schedules the next event based on system time.
-The format consists of 5 space-separated columns, each obeying the following syntax:
+This schedules the next event based on system time. The format consists of 5 space-separated columns, each obeying the
+following syntax:
 
 `SPEC[/DIVISOR]`
 
@@ -224,15 +224,21 @@ where `SPEC` is a comma separated list of integers or ranges indicated with a `-
 ## Development environment setup
 
 Create a new virtual environment, e.g with:
+
 ```
 python3 -m venv venv/
 ```
+
 Enter the environment with:
+
 ```
 source venv/bin/activate
 ```
+
 Use pip to install the entry point scripts in editable mode:
+
 ```
 pip install -e .
 ```
+
 They are now available in this virtual environment as `bsrvd`, `bsrvcli`, `bsrvtray`, `bsrvstatd`.

@@ -1,10 +1,10 @@
 [Unit]
-Description=Borg Backup Service Status Daemon
+Description = Borg Backup Service Status Daemon
 
 [Service]
-Type=simple
-ExecStart={{INSTALL_PREFIX}}/bin/bsrvstatd
+Type = simple
+ExecStart = {{INSTALL_PREFIX}}/bin/bsrvstatd
 
 [Install]
-WantedBy=multi-user.target
+WantedBy = multi-user.target
 
