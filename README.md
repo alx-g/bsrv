@@ -46,7 +46,7 @@ Also, the service relies on `dbus` to provide the interface for `bsrvcli` and ot
 `bsrvd`, at least for now, is hosted on a custom repository: https://pip.alx-g.de
 To install it using pip directly, use the following command:
 ```
-pip install --extra-index-url https://pip.alx-g.de/ bsrv
+pip install --extra-index-url https://pip.alx-g.de/ bsrv --no-binary bsrv
 ```
 
 After installation, configuration files are needed.
