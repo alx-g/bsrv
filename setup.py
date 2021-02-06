@@ -71,7 +71,7 @@ setuptools.setup(
         'Programming Language :: Python :: 3.9',
     ],
     python_requires='>=3.7',
-    install_requires=["dasbus", "PyGObject", "systemd-logging"],
+    install_requires=["dasbus", "PyGObject", "systemd-logging", "texttable"],
     entry_points={
         'console_scripts': [
             'bsrvd=bsrvd:main',
