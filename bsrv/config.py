@@ -34,16 +34,19 @@ class Config(metaclass=ConfigMeta):
             sys.exit(42)
 
     @staticmethod
-    def check_dirs():
+    def check_dirs(check_log_dir=True, check_base_dir=True, check_mount_dir=True):
         paths: List[pathlib.Path] = []
 
         if LogTarget.FILE in Logger.logging_targets:
             log_path = Config.get('logging', 'path')
-            log_dir, log_file = os.path.split(log_path)
-            paths.append(pathlib.Path(log_dir))
+            log_directory, log_file = os.path.split(log_path)
+            if check_log_dir:
+                paths.append(pathlib.Path(log_directory))
 
-        paths.append(pathlib.Path(Config.get('borg', 'base_dir')))
-        paths.append(pathlib.Path(Config.get('borg', 'mount_dir')))
+        if check_base_dir:
+            paths.append(pathlib.Path(Config.get('borg', 'base_dir')))
+        if check_mount_dir:
+            paths.append(pathlib.Path(Config.get('borg', 'mount_dir')))
 
         failed = False
 

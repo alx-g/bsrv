@@ -1,8 +1,9 @@
-import setuptools
+import atexit
 import os
 import sys
+
+import setuptools
 from setuptools.command.install import install
-import atexit
 
 SERVICE_FILE_PREFIX = 'lib/systemd/system'
 

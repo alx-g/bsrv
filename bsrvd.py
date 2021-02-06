@@ -37,8 +37,8 @@ def main():
         # Extract Jobs from Config
         for s in Config.sections():
             if s[0] == ':':
-                newjob = Job.from_config(s)
-                if newjob:
+                newjob = Job.from_bsrvd_config(s)
+                if newjob and newjob.runnable:
                     scheduler.register(newjob)
 
         if args.session_bus:

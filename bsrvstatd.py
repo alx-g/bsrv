@@ -128,7 +128,7 @@ def main():
 
     Logger.configure()
 
-    Config.check_dirs()
+    Config.check_dirs(check_mount_dir=False)
 
     Cache.initialize('bsrvstatd.cache')
 
@@ -137,7 +137,7 @@ def main():
     # Extract Jobs from Config
     for s in Config.sections():
         if s[0] == ':':
-            newjob = Job.from_config(s)
+            newjob = Job.from_bsrvstatd_config(s)
             if newjob:
                 if newjob.stat_maxage:
                     stat_jobs.append(newjob)

@@ -31,7 +31,69 @@ def every_expr2dt(match: re.Match) -> datetime.timedelta:
 
 class Job:
     @staticmethod
-    def from_config(cfg_section: str):
+    def from_bsrvstatd_config(cfg_section: str):
+        try:
+            hook_timeout = Config.getint('borg', 'hook_timeout', fallback=20)
+
+            hook_list_failed = Hook(
+                'hook_list_failed',
+                Config.get(cfg_section, 'hook_list_failed',
+                           fallback=Config.get('borg', 'hook_list_failed', fallback='')),
+                timeout=hook_timeout
+            )
+            hook_list_successful = Hook(
+                'hook_list_successful',
+                Config.get(cfg_section, 'hook_list_successful',
+                           fallback=Config.get('borg', 'hook_list_successful', fallback='')),
+                timeout=hook_timeout
+            )
+            hook_mount_failed = Hook('hook_mount_failed', '', timeout=hook_timeout)
+            hook_mount_successful = Hook('hook_mount_successful', '', timeout=hook_timeout)
+            hook_umount_failed = Hook('hook_umount_failed', '', timeout=hook_timeout)
+            hook_umount_successful = Hook('hook_umount_successful', '', timeout=hook_timeout)
+            hook_run_failed = Hook('hook_run_failed', '', timeout=hook_timeout)
+            hook_run_successful = Hook('hook_run_successful', '', timeout=hook_timeout)
+            hook_give_up = Hook('hook_give_up', '', timeout=hook_timeout)
+
+            every_expr = re.compile(r'^\s*((?P<weeks>\d+)\s*w(eeks?)?)?'
+                                    r'\s*((?P<days>\d+)\s*d(ays?)?)?'
+                                    r'\s*((?P<hours>\d+)\s*h(ours?)?)?'
+                                    r'\s*((?P<minutes>\d+)\s*m(in(utes?)?)?)?\s*$', re.IGNORECASE)
+
+            match = every_expr.fullmatch(Config.get(cfg_section, 'stat_maxage', fallback=''))
+            if match:
+                stat_maxage = every_expr2dt(match)
+            else:
+                stat_maxage = None
+
+            return Job(
+                name=cfg_section,
+                borg_repo=Config.get(cfg_section, 'borg_repo'),
+                borg_rsh=Config.get(cfg_section, 'borg_rsh', fallback='ssh'),
+                borg_archive_name_template=None,
+                borg_passphrase=Config.get(cfg_section, 'borg_passphrase'),
+                borg_prune_args=None,
+                borg_create_args=None,
+                schedule=None,
+                retry_delay=None,
+                retry_max=None,
+                stat_maxage=stat_maxage,
+                hook_list_failed=hook_list_failed,
+                hook_list_successful=hook_list_successful,
+                hook_mount_failed=hook_mount_failed,
+                hook_mount_successful=hook_mount_successful,
+                hook_umount_failed=hook_umount_failed,
+                hook_umount_successful=hook_umount_successful,
+                hook_run_failed=hook_run_failed,
+                hook_run_successful=hook_run_successful,
+                hook_give_up=hook_give_up
+            )
+        except configparser.NoOptionError as e:
+            Logger.error('Error in config file: Missing or invalid key for job "{}": {}'.format(cfg_section, e.message))
+            return None
+
+    @staticmethod
+    def from_bsrvd_config(cfg_section: str):
         try:
             hook_timeout = Config.getint('borg', 'hook_timeout', fallback=20)
 
@@ -95,12 +157,6 @@ class Job:
                                     r'\s*((?P<hours>\d+)\s*h(ours?)?)?'
                                     r'\s*((?P<minutes>\d+)\s*m(in(utes?)?)?)?\s*$', re.IGNORECASE)
 
-            match = every_expr.fullmatch(Config.get(cfg_section, 'stat_maxage', fallback=''))
-            if match:
-                stat_maxage = every_expr2dt(match)
-            else:
-                stat_maxage = None
-
             return Job(
                 name=cfg_section,
                 borg_repo=Config.get(cfg_section, 'borg_repo'),
@@ -113,7 +169,7 @@ class Job:
                 schedule=Schedule(Config.get(cfg_section, 'schedule')),
                 retry_delay=Config.getint(cfg_section, 'retry_delay', fallback=60),
                 retry_max=Config.getint(cfg_section, 'retry_max', fallback=3),
-                stat_maxage=stat_maxage,
+                stat_maxage=None,
                 hook_list_failed=hook_list_failed,
                 hook_list_successful=hook_list_successful,
                 hook_mount_failed=hook_mount_failed,
@@ -152,7 +208,7 @@ class Job:
             hook_run_successful: Hook,
             hook_give_up: Hook,
             stat_maxage: Union[datetime.timedelta, None] = None,
-            borg_archive_name_template="%Y-%m-%d_%H-%M-%S",
+            borg_archive_name_template: Union[str, None] = "%Y-%m-%d_%H-%M-%S",
             borg_rsh='ssh'
     ):
         self.name: str = name
@@ -169,6 +225,11 @@ class Job:
         self.last_archive_date = Cache.get('job_{}_last_dt'.format(self.name))
         self.mount_dir = os.path.join(Config.get('borg', 'mount_dir', fallback='/tmp/bsrvd-mount'), self.name)
         self.stat_maxage = stat_maxage
+
+        if self.borg_archive_name_template is None or self.borg_create_args is None or self.borg_prune_args is None or self.schedule is None or self.retry_delay is None or self.retry_max is None:
+            self.runnable = False
+        else:
+            self.runnable = True
 
         self.hook_list_failed: 'Hook' = hook_list_failed
         self.hook_list_failed.set_parent(self)
@@ -193,6 +254,9 @@ class Job:
         return other.name == self.name
 
     def run(self):
+        if not self.runnable:
+            raise RuntimeError('Job "{}" is not configured properly to be run.'.format(self.name))
+
         env = os.environ.copy()
         env['BORG_REPO'] = self.borg_repo
         env['BORG_RSH'] = self.borg_rsh
