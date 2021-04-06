@@ -40,7 +40,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="bsrv",
-    version="0.0.1a6",
+    version="0.0.1a7",
     author="Alexander Grathwohl",
     author_email="alex.grathwohl@gmail.com",
     description="Linux daemon to manage periodic borg backups",

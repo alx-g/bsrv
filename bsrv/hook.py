@@ -16,12 +16,15 @@ class Hook:
     @staticmethod
     def from_config(cfg_section: str, name: str):
         command_str = Config.get(cfg_section, name, fallback=Config.get('borg', name, fallback=''))
-        timeout = Config.getint(cfg_section, name + '_timeout', fallback=Config.getint('borg', name + '_timeout', fallback=Config.getint('borg', 'hook_timeout', fallback=20)))
+        timeout = Config.getint(cfg_section, name + '_timeout', fallback=Config.getint('borg', name + '_timeout',
+                                                                                       fallback=Config.getint('borg',
+                                                                                                              'hook_timeout',
+                                                                                                              fallback=20)))
         run_as = Config.get(cfg_section, name + '_run_as', fallback=Config.get('borg', name + '_run_as', fallback=None))
         return Hook(name=name, command_string=command_str, timeout=timeout, run_as=run_as)
 
     def __init__(self, name: str, command_string: str, timeout: int, run_as: Union[str, None]):
-        self.parent_descr: Union[str,None] = None
+        self.parent_descr: Union[str, None] = None
         self.name: str = name
         self.command: List[str] = shlex.split(command_string)
         self.timeout: int = timeout

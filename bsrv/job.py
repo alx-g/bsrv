@@ -53,6 +53,7 @@ class Job:
                 borg_passphrase=Config.get(cfg_section, 'borg_passphrase'),
                 borg_prune_args=None,
                 borg_create_args=None,
+                borg_create_args_file=None,
                 borg_run_as=None,
                 schedule=None,
                 retry_delay=None,
@@ -84,6 +85,7 @@ class Job:
                 borg_passphrase=Config.get(cfg_section, 'borg_passphrase'),
                 borg_prune_args=shlex.split(Config.get(cfg_section, 'borg_prune_args')),
                 borg_create_args=shlex.split(Config.get(cfg_section, 'borg_create_args')),
+                borg_create_args_file=Config.get(cfg_section, 'borg_create_args_file', fallback=None),
                 borg_run_as=Config.get(cfg_section, 'borg_run_as', fallback=None),
                 schedule=Schedule(Config.get(cfg_section, 'schedule')),
                 retry_delay=Config.getint(cfg_section, 'retry_delay', fallback=60),
@@ -113,6 +115,7 @@ class Job:
             borg_repo,
             borg_passphrase,
             borg_create_args,
+            borg_create_args_file,
             borg_prune_args,
             borg_run_as,
             schedule,
@@ -134,10 +137,34 @@ class Job:
         self.name: str = name
         self.borg_repo: str = borg_repo
         self.borg_passphrase: str = borg_passphrase
-        self.borg_rsh: str = borg_rsh
+        self.borg_base_dir: str = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
+        borg_rsh_tokens = shlex.split(borg_rsh)
+        if len(borg_rsh_tokens) < 1:
+            borg_rsh_tokens = ['ssh']
+        borg_rsh_prep = [borg_rsh_tokens[0]]
+        borg_rsh_prep += [
+            '-oUserKnownHostsFile="{}"'.format(os.path.join(self.borg_base_dir, 'known_hosts')),
+            '-oStrictHostKeyChecking=accept-new'
+        ]
+        borg_rsh_prep += borg_rsh_tokens[1:]
+        self.borg_rsh: str = shlex.join(borg_rsh_prep)
+
         self.borg_archive_name_template: str = borg_archive_name_template
         self.borg_prune_args: str = borg_prune_args
         self.borg_create_args: str = borg_create_args
+        if borg_create_args_file:
+            try:
+                with open(borg_create_args_file, 'r') as f:
+                    self.borg_create_args += [line.strip('\n') for line in f]
+            except FileNotFoundError:
+                Logger.error('[JOB] Could not create borg_create_args from borg_create_args_file "{}"'
+                             ' because this file does not exist. Continuing with remaining'
+                             ' arguments.'.format(borg_create_args_file))
+            except PermissionError:
+                Logger.error('[JOB] Could not create borg_create_args from borg_create_args_file "{}"'
+                             ' because this file can not be read from. Continuing with remaining'
+                             ' arguments.'.format(borg_create_args_file))
+
         self.demotion = DemotionSubprocess(borg_run_as, parent_descr='Job{}'.format(self.name))
 
         self.schedule: Schedule = schedule
@@ -183,7 +210,7 @@ class Job:
         env['BORG_REPO'] = self.borg_repo
         env['BORG_RSH'] = self.borg_rsh
         env['BORG_PASSPHRASE'] = self.borg_passphrase
-        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
+        env['BORG_BASE_DIR'] = self.borg_base_dir
 
         now = time.time()
 
@@ -281,7 +308,7 @@ class Job:
         env['BORG_REPO'] = self.borg_repo
         env['BORG_RSH'] = self.borg_rsh
         env['BORG_PASSPHRASE'] = self.borg_passphrase
-        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
+        env['BORG_BASE_DIR'] = self.borg_base_dir
 
         params = ['borg', 'list', '--json']
 
@@ -325,7 +352,7 @@ class Job:
         env['BORG_REPO'] = self.borg_repo
         env['BORG_RSH'] = self.borg_rsh
         env['BORG_PASSPHRASE'] = self.borg_passphrase
-        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
+        env['BORG_BASE_DIR'] = self.borg_base_dir
 
         params = ['borg', 'info', '--json']
 
@@ -361,7 +388,7 @@ class Job:
         env = os.environ.copy()
         env['BORG_RSH'] = self.borg_rsh
         env['BORG_PASSPHRASE'] = self.borg_passphrase
-        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
+        env['BORG_BASE_DIR'] = self.borg_base_dir
 
         pathlib.Path(self.mount_dir).mkdir(exist_ok=True)
         if Config.get_global('root'):
@@ -396,7 +423,7 @@ class Job:
 
     def umount(self):
         env = os.environ.copy()
-        env['BORG_BASE_DIR'] = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
+        env['BORG_BASE_DIR'] = self.borg_base_dir
 
         params = ['borg', 'umount', self.mount_dir]
 

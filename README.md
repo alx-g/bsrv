@@ -85,7 +85,8 @@ For more information on hooks, see dedicated sections [Job-Hooks](#job-hooks) an
 * `binary`: Specify an alternative path to the `borg` binary. If this value is not set, `borg` will be assumed to be in
   **PATH**.
 * `base_dir`: Set BORG_BASE_DIR, where borg places its cache and security info (e.g. nonces), default is
-  `/var/cache/bsrvd`.
+  `/var/cache/bsrvd`. `bsrv` also places cache files here. The `known_hosts` file used for `ssh` connections is
+  also located in this folder.
 * `mount_dir`: Base directory where to mount borg backup repositories using borg mount, default is `/tmp/bsrvd-mount`.
   The service needs to have write access to this folder.
 * `hook_timeout`: Global default for time in seconds, before hook commands are
@@ -116,9 +117,14 @@ see dedicated sections [Job-Hooks](#job-hooks) and [Stat-Hooks](#stat-hooks) bel
 * `borg_passphrase`: Passphrase for this borg repository
 * `borg_rsh`: ssh command used to open ssh connection if necessary to connect to repo. Default is `ssh`. This is useful
   to automate the login on a backup server via a certificate. Then, a private key file can be specified to be used for
-  ssh authentication using `ssh -i /path/to/id_rsa`.
+  ssh authentication using `ssh -i /path/to/id_rsa`. `bsrv` implicitly adds two parameters to customize the path of the 
+  used known_hosts file to be in the `base_dir` (see above). Also, host keys are accepted, as long as the hosts are new.
+  If host keys mismatch, this will result in an error.
 * `borg_create_args`: Arguments to pass to the borg create command specifying files and folder to backup and/or exclude.
   See `man borg` for more info.
+* `borg_create_args_file`: Path to a file with additional `borg_create_args`. Each line will be treated as an argument
+  to be added to the existing `borg_create_args` at the end. This can be used to e.g. supply a whitelist of paths and
+  files. Because this will just be added to the end, you can use this to supply actual arguments, too.
 * `borg_prune_args`: `bsrvd` automatically runs a `borg prune` after each successful backup. This option specifies the
   arguments to supply to this command.
 * `schedule`: Schedule defining when to run this backup. The syntax of this value is best explained in the
