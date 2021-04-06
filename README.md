@@ -167,8 +167,7 @@ following units:
 | Example | Description |
 |---|---|
 | `@every  1minute`| Run as soon as **TREF** lies back more than 1 minute
-| `@every 1 week 1 day 1 hour 1 minute` | Run as soon as **
-TREF** lies back more than 1 week, 1 day, 1 hour, and 1 minute
+| `@every 1 week 1 day 1 hour 1 minute` | Run as soon as **TREF** lies back more than 1 week, 1 day, 1 hour, and 1 minute
 | `@every 1w1d1h1m` | Same thing
 | `@hourly` | Run as soon as **TREF** lies back more than 1 hour
 | `@every 2 hours` | Run as soon as **TREF** lies back more than 2 hours
