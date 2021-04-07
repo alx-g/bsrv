@@ -18,6 +18,18 @@ but from a tray menu.
 `bsrvstatd` is a Python3 daemon that periodically checks the backup repositories for the latest backup archives. It may
 trigger external commands, e.g. to inform daily or only in case of failed backups.
 
+## Installation
+
+The stable source for `bsrvd`, at least for now, is hosted here: https://files.alx-g.de/bsrv/bsrvd-{version}.tar.gz
+
+### Arch Linux
+
+TBD
+
+### Debian/Ubuntu
+
+TBD
+
 ## Dependencies
 
 **System**
@@ -40,18 +52,6 @@ Also, the service relies on `dbus` to provide the interface for `bsrvcli` and ot
 * **systemd-logging**
 * **texttable**
 * **pyqt5** (only necessary for `bsrvtray`)
-
-## Installation
-
-`bsrvd`, at least for now, is hosted on a custom repository: https://pip.alx-g.de
-To install it using pip directly, use the following command:
-
-```
-pip install --extra-index-url https://pip.alx-g.de/ bsrv --no-binary bsrv
-```
-
-After installation, configuration files are needed. See the following section, and the provided `bsrvd_example.conf` for
-a guide.
 
 ## Configuration
 
