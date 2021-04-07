@@ -85,7 +85,7 @@ For more information on hooks, see dedicated sections [Job-Hooks](#job-hooks) an
 * `binary`: Specify an alternative path to the `borg` binary. If this value is not set, `borg` will be assumed to be in
   **PATH**.
 * `base_dir`: Set BORG_BASE_DIR, where borg places its cache and security info (e.g. nonces), default is
-  `/var/cache/bsrvd`. `bsrv` also places cache files here. The `known_hosts` file used for `ssh` connections is
+  `/var/lib/bsrvd`. `bsrv` also places cache files here. The `known_hosts` file used for `ssh` connections is
   also located in this folder.
 * `mount_dir`: Base directory where to mount borg backup repositories using borg mount, default is `/tmp/bsrvd-mount`.
   The service needs to have write access to this folder.

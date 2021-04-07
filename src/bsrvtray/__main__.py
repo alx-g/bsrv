@@ -15,7 +15,7 @@ from pkg_resources import resource_filename
 from bsrv import SYSTEM_BUS, SESSION_BUS, get_dbus_service_identifier
 from bsrv.tools import parse_json, pretty_info
 
-DATA_PACKAGE_NAME = 'bsrv'
+ASSETS_PATH = '/usr/share/bsrv/assets/'
 
 
 class Status:
@@ -75,40 +75,38 @@ class MainApp:
         # Save reference to dbus interface identifier
         self.dbus_service_identifier = dbus_service_identifier
 
-        self.log.critical(resource_filename(DATA_PACKAGE_NAME, "icons/icon_noconnection.png"))
-
         # Load all tray icon files
         self.icon_noconnection = [
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_noconnection.png")),
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon.png"))
+            QIcon(os.path.join(ASSETS_PATH, "icon_noconnection.png")),
+            QIcon(os.path.join(ASSETS_PATH, "icon.png"))
         ]
         self.icon_pause = [
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_pause.png")),
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon.png"))
+            QIcon(os.path.join(ASSETS_PATH, "icon_pause.png")),
+            QIcon(os.path.join(ASSETS_PATH, "icon.png"))
         ]
         self.icon_running = [
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running0.png")),
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running1.png")),
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running2.png")),
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running3.png")),
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running4.png")),
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running5.png")),
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running6.png")),
-            QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_running7.png"))
+            QIcon(os.path.join(ASSETS_PATH, "icon_running0.png")),
+            QIcon(os.path.join(ASSETS_PATH, "icon_running1.png")),
+            QIcon(os.path.join(ASSETS_PATH, "icon_running2.png")),
+            QIcon(os.path.join(ASSETS_PATH, "icon_running3.png")),
+            QIcon(os.path.join(ASSETS_PATH, "icon_running4.png")),
+            QIcon(os.path.join(ASSETS_PATH, "icon_running5.png")),
+            QIcon(os.path.join(ASSETS_PATH, "icon_running6.png")),
+            QIcon(os.path.join(ASSETS_PATH, "icon_running7.png"))
         ]
-        self.icon_error = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_error.png"))
-        self.icon_ok = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_ok.png"))
-        self.icon_attention = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/icon_attention.png"))
+        self.icon_error = QIcon(os.path.join(ASSETS_PATH, "icon_error.png"))
+        self.icon_ok = QIcon(os.path.join(ASSETS_PATH, "icon_ok.png"))
+        self.icon_attention = QIcon(os.path.join(ASSETS_PATH, "icon_attention.png"))
 
-        # Load icons for menu
-        self.micon_exit = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_exit.png"))
-        self.micon_pause = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_pause.png"))
-        self.micon_info = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_info.png"))
-        self.micon_run = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_run.png"))
-        self.micon_mount = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_mount.png"))
-        self.micon_umount = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_umount.png"))
-        # self.micon_log = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_log.png"))
-        # self.micon_console = QIcon(resource_filename(DATA_PACKAGE_NAME, "icons/micon_console.png"))
+        # Load assets for menu
+        self.micon_exit = QIcon(os.path.join(ASSETS_PATH, "micon_exit.png"))
+        self.micon_pause = QIcon(os.path.join(ASSETS_PATH, "micon_pause.png"))
+        self.micon_info = QIcon(os.path.join(ASSETS_PATH, "micon_info.png"))
+        self.micon_run = QIcon(os.path.join(ASSETS_PATH, "micon_run.png"))
+        self.micon_mount = QIcon(os.path.join(ASSETS_PATH, "micon_mount.png"))
+        self.micon_umount = QIcon(os.path.join(ASSETS_PATH, "micon_umount.png"))
+        # self.micon_log = QIcon(os.path.join(DATA_PACKAGE_NAME, "micon_log.png"))
+        # self.micon_console = QIcon(os.path.join(DATA_PACKAGE_NAME, "micon_console.png"))
 
         # Setup tray icon
         self.qapp.setQuitOnLastWindowClosed(False)

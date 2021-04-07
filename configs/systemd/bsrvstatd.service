@@ -3,7 +3,7 @@ Description = Borg Backup Service Status Daemon
 
 [Service]
 Type = simple
-ExecStart = {{INSTALL_PREFIX}}/bin/bsrvstatd
+ExecStart = {{PKGDIR}}/usr/bin/bsrvstatd
 
 [Install]
 WantedBy = multi-user.target

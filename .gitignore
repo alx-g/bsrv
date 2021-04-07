@@ -130,3 +130,6 @@ dmypy.json
 
 # Jetbrains
 .idea/
+
+# Built source tarball
+bsrv-*.tar.gz

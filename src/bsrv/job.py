@@ -137,7 +137,7 @@ class Job:
         self.name: str = name
         self.borg_repo: str = borg_repo
         self.borg_passphrase: str = borg_passphrase
-        self.borg_base_dir: str = Config.get('borg', 'base_dir', fallback='/var/cache/bsrvd')
+        self.borg_base_dir: str = Config.get('borg', 'base_dir', fallback='/var/lib/bsrvd')
         borg_rsh_tokens = shlex.split(borg_rsh)
         if len(borg_rsh_tokens) < 1:
             borg_rsh_tokens = ['ssh']
