@@ -24,7 +24,7 @@ The stable source for `bsrvd`, at least for now, is hosted here: https://files.a
 
 ### Arch Linux
 
-TBD
+A PKGBUILD can be found [here](https://github.com/alx-g/bsrv-arch/)
 
 ### Debian/Ubuntu
 
