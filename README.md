@@ -20,7 +20,11 @@ trigger external commands, e.g. to inform daily or only in case of failed backup
 
 ## Installation
 
-The stable source for `bsrvd`, at least for now, is hosted here: https://files.alx-g.de/bsrv/bsrvd-{version}.tar.gz
+The stable source for `bsrvd`, at least for now, is hosted on github and can be accessed via
+
+```
+https://github.com/alx-g/bsrv/archive/refs/tags/{version_tag}.tar.gz
+```
 
 ### Arch Linux
 
