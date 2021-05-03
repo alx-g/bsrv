@@ -785,7 +785,7 @@ class Scheduler:
                     seconds=job.retry_delay)))
                 self.queue.put(job, scheduled_retry_dt)
             else:
-                job.hook_give_up.trigger(env={'BSRV_JOB': self.name})
+                job.hook_give_up.trigger(env={'BSRV_JOB': job.name})
                 scheduled_next_dt = job.get_next_archive_datetime(datetime.datetime.now())
                 self.queue.put(job, scheduled_next_dt)
 
