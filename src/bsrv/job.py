@@ -138,16 +138,27 @@ class Job:
         self.borg_repo: str = borg_repo
         self.borg_passphrase: str = borg_passphrase
         self.borg_base_dir: str = Config.get('borg', 'base_dir', fallback='/var/lib/bsrvd')
-        borg_rsh_tokens = shlex.split(borg_rsh)
-        if len(borg_rsh_tokens) < 1:
-            borg_rsh_tokens = ['ssh']
-        borg_rsh_prep = [borg_rsh_tokens[0]]
-        borg_rsh_prep += [
-            '-oUserKnownHostsFile="{}"'.format(os.path.join(self.borg_base_dir, 'known_hosts')),
-            '-oStrictHostKeyChecking=accept-new'
-        ]
-        borg_rsh_prep += borg_rsh_tokens[1:]
-        self.borg_rsh: str = shlex.join(borg_rsh_prep)
+
+        try:
+            shlex.join([])
+        except AttributeError:
+            # pre python 3.8
+            borg_rsh_tokens = shlex.split(borg_rsh)
+            if len(borg_rsh_tokens) < 1:
+                borg_rsh = 'ssh'
+            self.borg_rsh: str = borg_rsh + ' ' + '-oUserKnownHostsFile="{}"'.format(os.path.join(self.borg_base_dir, 'known_hosts')) + ' ' + '-oStrictHostKeyChecking=accept-new'
+        else:
+            # post python 3.8
+            borg_rsh_tokens = shlex.split(borg_rsh)
+            if len(borg_rsh_tokens) < 1:
+                borg_rsh_tokens = ['ssh']
+            borg_rsh_prep = [borg_rsh_tokens[0]]
+            borg_rsh_prep += [
+                '-oUserKnownHostsFile="{}"'.format(os.path.join(self.borg_base_dir, 'known_hosts')),
+                '-oStrictHostKeyChecking=accept-new'
+            ]
+            borg_rsh_prep += borg_rsh_tokens[1:]
+            self.borg_rsh: str = shlex.join(borg_rsh_prep)
 
         self.borg_archive_name_template: str = borg_archive_name_template
         self.borg_prune_args: str = borg_prune_args
