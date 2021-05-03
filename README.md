@@ -36,16 +36,9 @@ https://github.com/alx-g/bsrv/archive/refs/tags/{version_tag}.tar.gz
 
 **System**
 
-To be able to install the python dependencies, `gobject-introspection` needs to be present.
-
-* **Fedora, CentOS, RHEL, etc.**: gobject-introspection-devel
-* **Debian, Ubuntu, Mint, etc.**: libgirepository1.0-dev
-* **Arch**: gobject-introspection
-* **FreeBSD**: gobject-introspection
-* **Cygwin**: libgirepository1.0-devel
-* **msys2**: mingw-w64-x86_64-gobject-introspection and/or mingw-w64-i686-gobject-introspection
-
-Also, the service relies on `dbus` to provide the interface for `bsrvcli` and other clients.
+Obviously, this service relies on `borg`.
+Additionally, the service relies on `dbus` to provide the services interface.
+Also, it connects to `journald` to provide sensible logging.
 
 **Python**
 
@@ -252,25 +245,3 @@ All stat hook commands listed above will be launched in an environment with the 
 * `BSRV_INFO_JSON` contains information about all jobs, where status checks have been performed in JSON format for easy
   postprocessing
 
-
-## Development environment setup
-
-Create a new virtual environment, e.g with:
-
-```
-python3 -m venv venv/
-```
-
-Enter the environment with:
-
-```
-source venv/bin/activate
-```
-
-Use pip to install the entry point scripts in editable mode:
-
-```
-pip install -e .
-```
-
-They are now available in this virtual environment as `bsrvd`, `bsrvcli`, `bsrvtray`, `bsrvstatd`.
