@@ -26,13 +26,11 @@ The stable source for `bsrvd`, at least for now, is hosted on github and can be 
 https://github.com/alx-g/bsrv/archive/refs/tags/{version_tag}.tar.gz
 ```
 
-### Arch Linux
+## Building packages for distributions
 
-A PKGBUILD can be found [here](https://github.com/alx-g/bsrv-arch/)
+[Arch Linux](https://github.com/alx-g/bsrv-arch/)
 
-### Debian/Ubuntu
-
-TBD
+[Debian/Ubuntu](https://github.com/alx-g/bsrv-debian/)
 
 ## Dependencies
 
