@@ -7,6 +7,8 @@ from .logger import Logger
 class DemotionSubprocess:
     def __init__(self, username: str, parent_descr: str):
         self.parent_descr = parent_descr
+        self.is_demotion = False
+        self.name = username
         confirmed = False
         if username is not None:
             try:
@@ -22,6 +24,8 @@ class DemotionSubprocess:
                                  'instead.'.format(self.parent_descr, username, self.uid, self.gid))
                 else:
                     confirmed = True
+                    if self.uid != os.getuid():
+                        self.is_demotion = True
 
             except KeyError:
                 Logger.error('Parent: "{}". Setuid was not successful for user "{}". '

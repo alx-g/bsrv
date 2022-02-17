@@ -134,10 +134,22 @@ class Job:
             borg_archive_name_template: Union[str, None] = "%Y-%m-%d_%H-%M-%S",
             borg_rsh='ssh'
     ):
+
+        self.runnable = True
+
         self.name: str = name
         self.borg_repo: str = borg_repo
         self.borg_passphrase: str = borg_passphrase
-        self.borg_base_dir: str = Config.get('borg', 'base_dir', fallback='/var/lib/bsrvd')
+
+        self.demotion = DemotionSubprocess(borg_run_as, parent_descr='Job{}'.format(self.name))
+        if self.demotion.is_demotion:
+            if not Config.check_user_dirs(self.demotion):
+                self.runnable = False
+            self.borg_base_dir: str = os.path.join(Config.get('borg', 'base_dir', fallback='/var/lib/bsrvd'), 'u_' + self.demotion.name)
+            self.mount_dir = os.path.join(Config.get('borg', 'mount_dir', fallback='/tmp/bsrvd-mount'), 'u_' + self.demotion.name, self.name)
+        else:
+            self.borg_base_dir: str = Config.get('borg', 'base_dir', fallback='/var/lib/bsrvd')
+            self.mount_dir = os.path.join(Config.get('borg', 'mount_dir', fallback='/tmp/bsrvd-mount'), self.name)
 
         try:
             shlex.join([])
@@ -176,20 +188,15 @@ class Job:
                              ' because this file can not be read from. Continuing with remaining'
                              ' arguments.'.format(borg_create_args_file))
 
-        self.demotion = DemotionSubprocess(borg_run_as, parent_descr='Job{}'.format(self.name))
-
         self.schedule: Schedule = schedule
         self.retry_delay: int = retry_delay
         self.retry_max: int = retry_max
         self.retry_count: int = 0
         self.last_archive_date = Cache.get('job_{}_last_dt'.format(self.name))
-        self.mount_dir = os.path.join(Config.get('borg', 'mount_dir', fallback='/tmp/bsrvd-mount'), self.name)
         self.stat_maxage = stat_maxage
 
         if self.borg_archive_name_template is None or self.borg_create_args is None or self.borg_prune_args is None or self.schedule is None or self.retry_delay is None or self.retry_max is None:
             self.runnable = False
-        else:
-            self.runnable = True
 
         self.hook_list_failed: 'Hook' = hook_list_failed
         self.hook_list_failed.set_parent_description(self.name)

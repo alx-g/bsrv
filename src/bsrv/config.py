@@ -5,6 +5,7 @@ import sys
 from typing import List
 
 from .logger import Logger, LogTarget
+from .demote import DemotionSubprocess
 
 
 class ConfigMeta(type):
@@ -57,6 +58,40 @@ class Config(metaclass=ConfigMeta):
                 Logger.critical('Cannot write to "{}"'.format(path))
         if failed:
             sys.exit(33)
+
+    @staticmethod
+    def check_user_dirs(demotion: DemotionSubprocess, check_base_dir=True, check_mount_dir=True) -> bool:
+        paths: List[pathlib.Path] = []
+
+        if check_base_dir:
+            paths.append(pathlib.Path(Config.get('borg', 'base_dir')) / ('u_' + demotion.name))
+        if check_mount_dir:
+            paths.append(pathlib.Path(Config.get('borg', 'mount_dir')) / ('u_' + demotion.name))
+
+        for path in paths:
+            try:
+                path.mkdir(mode=0o755, parents=True, exist_ok=True)
+            except:
+                Logger.critical('Cannot create user dir "{}"'.format(path))
+                return False
+
+            try:
+                os.chown(path.as_posix(), demotion.uid, demotion.gid)
+            except:
+                Logger.critical('Cannot chown user dir "{}"'.format(path))
+                return False
+
+            try:
+                os.chmod(path.as_posix(), 0o755)
+            except:
+                Logger.critical('Cannot chmod user dir "{}"'.format(path))
+                return False
+
+            if not os.access(path, os.R_OK | os.X_OK | os.W_OK):
+                Logger.critical('Cannot write to user dir "{}"'.format(path))
+                return False
+
+        return True
 
     @staticmethod
     def set_global(key, val):
