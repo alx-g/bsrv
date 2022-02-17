@@ -300,9 +300,12 @@ class Job:
             if list_of_archives:
                 list_of_times = sorted([a['time'] for a in list_of_archives], reverse=True)
                 if list_of_times:
-                    return list_of_times[0]
+                    v = list_of_times[0]
                 else:
-                    return datetime.datetime.fromtimestamp(0)
+                    v = datetime.datetime.fromtimestamp(0)
+
+                self.set_last_archive_datetime(v)
+                return v
 
             Logger.warning('Could not determine last successful archive datetime for job "{}".'.format(self.name))
             return None
