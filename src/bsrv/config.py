@@ -60,13 +60,11 @@ class Config(metaclass=ConfigMeta):
             sys.exit(33)
 
     @staticmethod
-    def check_user_dirs(demotion: DemotionSubprocess, check_base_dir=True, check_mount_dir=True) -> bool:
+    def check_user_dirs(demotion: DemotionSubprocess, mount_name: str) -> bool:
         paths: List[pathlib.Path] = []
 
-        if check_base_dir:
-            paths.append(pathlib.Path(Config.get('borg', 'base_dir')) / ('u_' + demotion.name))
-        if check_mount_dir:
-            paths.append(pathlib.Path(Config.get('borg', 'mount_dir')) / ('u_' + demotion.name))
+        paths.append(pathlib.Path(Config.get('borg', 'base_dir')) / ('u_' + demotion.name))
+        paths.append(pathlib.Path(Config.get('borg', 'mount_dir')) / ('u_' + demotion.name) / mount_name)
 
         for path in paths:
             try:

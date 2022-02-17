@@ -143,7 +143,7 @@ class Job:
 
         self.demotion = DemotionSubprocess(borg_run_as, parent_descr='Job{}'.format(self.name))
         if self.demotion.is_demotion:
-            if not Config.check_user_dirs(self.demotion):
+            if not Config.check_user_dirs(self.demotion, mount_name=self.name):
                 self.runnable = False
             self.borg_base_dir: str = os.path.join(Config.get('borg', 'base_dir', fallback='/var/lib/bsrvd'), 'u_' + self.demotion.name)
             self.mount_dir = os.path.join(Config.get('borg', 'mount_dir', fallback='/tmp/bsrvd-mount'), 'u_' + self.demotion.name, self.name)
@@ -180,13 +180,13 @@ class Job:
                 with open(borg_create_args_file, 'r') as f:
                     self.borg_create_args += [line.strip('\n') for line in f]
             except FileNotFoundError:
-                Logger.error('[JOB] Could not create borg_create_args from borg_create_args_file "{}"'
+                Logger.error('[JOB{}] Could not create borg_create_args from borg_create_args_file "{}"'
                              ' because this file does not exist. Continuing with remaining'
-                             ' arguments.'.format(borg_create_args_file))
+                             ' arguments.'.format(self.name, borg_create_args_file))
             except PermissionError:
-                Logger.error('[JOB] Could not create borg_create_args from borg_create_args_file "{}"'
+                Logger.error('[JOB{}] Could not create borg_create_args from borg_create_args_file "{}"'
                              ' because this file can not be read from. Continuing with remaining'
-                             ' arguments.'.format(borg_create_args_file))
+                             ' arguments.'.format(self.name, borg_create_args_file))
 
         self.schedule: Schedule = schedule
         self.retry_delay: int = retry_delay
@@ -236,7 +236,7 @@ class Job:
         params = [Config.get('borg', 'binary', fallback='borg'), 'create'] + [archive_name] + self.borg_create_args
 
         tokens = [shlex.quote(token) for token in params]
-        Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
+        Logger.info('[JOB%s] Running \'%s\'', self.name, ' '.join(tokens))
 
         p = self.demotion.Popen(
             params,
@@ -251,22 +251,22 @@ class Job:
         if p.returncode == 0:
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
-                    Logger.info('[JOB] ' + line)
+                    Logger.info('[JOB%s] ' % (self.name,) + line)
         else:
             Logger.error('[JOB] borg returned with non-zero exitcode')
             hook_lines = ''
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
-                    Logger.error('[JOB] ' + line)
+                    Logger.error('[JOB%s] ' % (self.name,) + line)
                     hook_lines += line + '\\n'
-            Logger.warn('[JOB] skipping borg prune due to previous error')
+            Logger.warn('[JOB%s] skipping borg prune due to previous error' % (self.name,))
             self.hook_run_failed.trigger(env={'BSRV_JOB': self.name, 'BSRV_ERROR': hook_lines})
             return False
 
         params = [Config.get('borg', 'binary', fallback='borg'), 'prune'] + self.borg_prune_args
 
         tokens = [shlex.quote(token) for token in params]
-        Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
+        Logger.info('[JOB%s] Running \'%s\'', self.name, ' '.join(tokens))
 
         p = self.demotion.Popen(
             params,
@@ -281,15 +281,15 @@ class Job:
         if p.returncode == 0:
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
-                    Logger.info('[JOB] ' + line)
+                    Logger.info('[JOB%s] ' % (self.name,) + line)
             self.hook_run_successful.trigger(env={'BSRV_JOB': self.name})
             return True
         else:
-            Logger.error('[JOB] borg returned with non-zero exitcode')
+            Logger.error('[JOB%s] borg returned with non-zero exitcode' % (self.name,))
             hook_lines = ''
             if stdout_ or stderr_:
                 for line in (stdout_ + stderr_).splitlines(keepends=False):
-                    Logger.error('[JOB] ' + line)
+                    Logger.error('[JOB%s] ' % (self.name,) + line)
                     hook_lines += line + '\\n'
             self.hook_run_failed.trigger(env={'BSRV_JOB': self.name, 'BSRV_ERROR': hook_lines})
             return False
@@ -331,7 +331,7 @@ class Job:
         params = ['borg', 'list', '--json']
 
         tokens = [shlex.quote(token) for token in params]
-        Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
+        Logger.info('[JOB%s] Running \'%s\'', self.name,' '.join(tokens))
 
         p = self.demotion.Popen(
             params,
@@ -375,7 +375,7 @@ class Job:
         params = ['borg', 'info', '--json']
 
         tokens = [shlex.quote(token) for token in params]
-        Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
+        Logger.info('[JOB%s] Running \'%s\'', self.name, ' '.join(tokens))
 
         p = self.demotion.Popen(
             params,
@@ -408,14 +408,13 @@ class Job:
         env['BORG_PASSPHRASE'] = self.borg_passphrase
         env['BORG_BASE_DIR'] = self.borg_base_dir
 
-        pathlib.Path(self.mount_dir).mkdir(exist_ok=True)
         if Config.get_global('root'):
             params = ['borg', 'mount', '-o', 'allow_other', self.borg_repo, self.mount_dir]
         else:
             params = ['borg', 'mount', self.borg_repo, self.mount_dir]
 
         tokens = [shlex.quote(token) for token in params]
-        Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
+        Logger.info('[JOB%s] Running \'%s\'', self.name, ' '.join(tokens))
 
         p = self.demotion.Popen(
             params,
@@ -446,7 +445,7 @@ class Job:
         params = ['borg', 'umount', self.mount_dir]
 
         tokens = [shlex.quote(token) for token in params]
-        Logger.info('[JOB] Running \'%s\'', ' '.join(tokens))
+        Logger.info('[JOB%s] Running \'%s\'', self.name, ' '.join(tokens))
 
         p = self.demotion.Popen(
             params,
@@ -756,18 +755,18 @@ class Scheduler:
 
     def job_thread(self, job: 'Job') -> NoReturn:
         if job.retry_count > 0:
-            Logger.info('[JOB] Launching retry {} for job "{}"...'.format(job.retry_count, job.name))
+            Logger.info('[JOB{}] Launching retry {}...'.format(job.name, job.retry_count))
         else:
-            Logger.info('[JOB] Launching job "{}"...'.format(job.name))
+            Logger.info('[JOB{}] Launching job...'.format(job.name))
 
         successful = job.run()
         if successful:
             if job.retry_count > 0:
                 Logger.info(
-                    '[JOB] Retry {} for job "{}" completed successfully'.format(job.retry_count, job.name))
+                    '[JOB{}] Retry {} completed successfully'.format(job.name, job.retry_count))
                 job.retry_count = 0
             else:
-                Logger.info('[JOB] job "{}" completed successfully'.format(job.name))
+                Logger.info('[JOB{}] job completed successfully'.format(job.name))
                 job.retry_count = 0
 
             job.set_last_archive_datetime(datetime.datetime.now())
@@ -780,26 +779,26 @@ class Scheduler:
             give_up = job.retry_count >= job.retry_max
             if job.retry_count > 0:
                 if give_up:
-                    Logger.error('[JOB] Retry {} for job "{}" failed. Giving up.'.format(job.retry_count, job.name))
+                    Logger.error('[JOB{}] Retry {} failed. Giving up.'.format(job.name, job.retry_count))
                     job.retry_count = -1
                 else:
-                    Logger.warning('[JOB] Retry {} for job "{}" failed'.format(job.retry_count, job.name))
+                    Logger.warning('[JOB{}] Retry {} failed'.format(job.name, job.retry_count))
                     if job.retry_count < 0:
                         job.retry_count = 0
                     job.retry_count += 1
             else:
                 if give_up:
-                    Logger.error('[JOB] Job "{}" failed. Giving up.'.format(job.name))
+                    Logger.error('[JOB{}] Job failed. Giving up.'.format(job.name))
                     job.retry_count = -1
                 else:
-                    Logger.warning('[JOB] Job "{}" failed.'.format(job.name))
+                    Logger.warning('[JOB{}] Job failed.'.format(job.name))
                     if job.retry_count < 0:
                         job.retry_count = 0
                     job.retry_count += 1
 
             if not give_up:
                 scheduled_retry_dt = datetime.datetime.now() + datetime.timedelta(seconds=job.retry_delay)
-                Logger.debug('[JOB] Retry for job "{}" scheduled in {}'.format(job.name, datetime.timedelta(
+                Logger.debug('[JOB{}] Retry scheduled in {}'.format(job.name, datetime.timedelta(
                     seconds=job.retry_delay)))
                 self.queue.put(job, scheduled_retry_dt)
             else:
